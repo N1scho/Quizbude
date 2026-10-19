@@ -1,0 +1,29 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "vitest/globals"],
+    "baseUrl": ".",
+    "paths": {
+      "@quizbude/protocol": ["packages/protocol/src/index.ts"],
+      "@quizbude/core": ["packages/core/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/protocol/src/**/*.ts",
+    "packages/core/src/**/*.ts",
+    "packages/server/src/**/*.ts",
+    "apps/host-web/src/**/*.ts",
+    "apps/host-web/src/**/*.tsx",
+    "apps/player-web/src/**/*.ts",
+    "apps/player-web/src/**/*.tsx",
+    "test/**/*.ts"
+  ]
+}
