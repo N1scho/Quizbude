@@ -1,0 +1,353 @@
+/* Quizbude — Bühne. Palette ausschließlich aus konzept-ux.md, Abschnitt 4. */
+:root {
+  --buehne: #121126;
+  --flaeche: #2b2752;
+  --linie: #413b73;
+  --papier: #f7f6fb;
+  --gedaempft: #a9a6c9;
+  --tinte: #121126;
+
+  --sonne: #ffc94d;
+  --welle: #36bfe0;
+  --glut: #b3350c;
+  --nacht: #2b2a8c;
+
+  --mint: #3ddc97;
+  --plum: #3b1033;
+  --schiefer: #3a3a4a;
+
+  --ein: cubic-bezier(0.2, 0, 0, 1);
+  --aus: cubic-bezier(0.4, 0, 1, 1);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--buehne);
+  color: var(--papier);
+  font-family: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+
+.buehne {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  /* TV-Overscan und Beamer-Keystone fressen die Ränder. */
+  padding: 48px;
+  gap: 24px;
+}
+
+.kopf {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 28px;
+  color: var(--gedaempft);
+}
+
+.marke {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 24px;
+}
+
+.mitte {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 32px;
+  min-height: 0;
+}
+
+/* --- Lobby ------------------------------------------------------------- */
+.code {
+  font-size: 180px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  color: var(--papier);
+}
+
+.code-hinweis {
+  font-size: 36px;
+  color: var(--gedaempft);
+}
+
+.namensraster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.name {
+  font-size: 36px;
+  padding: 12px 24px;
+  border-radius: 14px;
+  background: var(--flaeche);
+  border: 2px solid var(--linie);
+  animation: einschieben 240ms var(--ein);
+}
+
+.name.weg {
+  opacity: 0.45;
+}
+
+@keyframes einschieben {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+}
+
+/* --- Frage ------------------------------------------------------------- */
+.frage {
+  font-size: 64px;
+  line-height: 1.15;
+  text-align: center;
+  max-width: 1500px;
+  font-weight: 600;
+}
+
+.ankuendigung {
+  font-size: 96px;
+  font-weight: 700;
+}
+
+.lesebalken {
+  width: 60%;
+  height: 10px;
+  background: var(--flaeche);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.lesebalken > i {
+  display: block;
+  height: 100%;
+  background: var(--sonne);
+}
+
+.kacheln {
+  display: grid;
+  gap: 20px;
+  width: 100%;
+}
+
+.kacheln.quad {
+  grid-template-columns: 1fr 1fr;
+}
+
+.kacheln.duo {
+  grid-template-columns: 1fr;
+}
+
+.kachel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 28px;
+  min-height: 120px;
+  border-radius: 16px;
+  /* Die Kachelgrenze ist kein Zierrat: sie löst den Nacht-auf-Bühne-Fall. */
+  border: 3px solid var(--papier);
+  font-size: 40px;
+  font-weight: 600;
+  transition:
+    transform 240ms var(--ein),
+    opacity 240ms var(--aus);
+}
+
+.kachel.sonne {
+  background: var(--sonne);
+  color: var(--tinte);
+}
+.kachel.welle {
+  background: var(--welle);
+  color: var(--tinte);
+}
+.kachel.glut {
+  background: var(--glut);
+  color: var(--papier);
+}
+.kachel.nacht {
+  background: var(--nacht);
+  color: var(--papier);
+}
+
+.kachel.richtig {
+  transform: scale(1.06);
+}
+
+.kachel.falsch {
+  opacity: 0.45;
+}
+
+.kachel .marke-richtig {
+  margin-left: auto;
+  font-size: 48px;
+}
+
+.balken {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 14px;
+  background: rgba(18, 17, 38, 0.35);
+  border-radius: 0 0 13px 13px;
+  overflow: hidden;
+}
+
+.balken > i {
+  display: block;
+  height: 100%;
+  background: var(--papier);
+  transition: width 600ms var(--ein);
+}
+
+.balkenzahl {
+  position: absolute;
+  right: 16px;
+  top: 12px;
+  font-size: 28px;
+  opacity: 0.85;
+}
+
+/* --- Timer und Zähler --------------------------------------------------- */
+.leiste {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  font-size: 40px;
+}
+
+.ring {
+  display: grid;
+  place-items: center;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  border: 10px solid var(--linie);
+  font-size: 52px;
+  font-weight: 700;
+}
+
+.ring.steht {
+  border-color: var(--gedaempft);
+  color: var(--gedaempft);
+}
+
+.ring.eng {
+  border-color: var(--sonne);
+  color: var(--sonne);
+}
+
+.zaehler {
+  font-size: 64px;
+  font-weight: 700;
+}
+
+.zaehler small {
+  display: block;
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--gedaempft);
+}
+
+/* --- Rangliste ---------------------------------------------------------- */
+.rangliste {
+  width: 70%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rang {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  align-items: center;
+  gap: 24px;
+  padding: 18px 28px;
+  border-radius: 16px;
+  background: var(--flaeche);
+  border: 2px solid var(--linie);
+  font-size: 44px;
+  transition: transform 400ms var(--ein);
+}
+
+.rang .platz {
+  color: var(--sonne);
+  font-weight: 700;
+}
+
+.rang.eins {
+  border-color: var(--sonne);
+}
+
+.weitere {
+  font-size: 28px;
+  color: var(--gedaempft);
+}
+
+/* --- Bedienung ---------------------------------------------------------- */
+.fuss {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+}
+
+button.weiter {
+  font: inherit;
+  font-size: 32px;
+  font-weight: 600;
+  padding: 18px 40px;
+  border-radius: 14px;
+  border: 2px solid var(--sonne);
+  background: var(--sonne);
+  color: var(--tinte);
+  cursor: pointer;
+  transition: transform 120ms var(--ein);
+}
+
+button.weiter:disabled {
+  background: transparent;
+  border-color: var(--linie);
+  color: var(--gedaempft);
+  cursor: default;
+}
+
+button.weiter:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.tastaturhinweis {
+  font-size: 24px;
+  color: var(--gedaempft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

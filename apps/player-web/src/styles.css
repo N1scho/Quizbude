@@ -1,0 +1,312 @@
+/* Quizbude — Buzzer. Palette ausschließlich aus konzept-ux.md, Abschnitt 4. */
+:root {
+  --buehne: #121126;
+  --flaeche: #2b2752;
+  --linie: #413b73;
+  --papier: #f7f6fb;
+  --gedaempft: #a9a6c9;
+  --tinte: #121126;
+
+  --sonne: #ffc94d;
+  --welle: #36bfe0;
+  --glut: #b3350c;
+  --nacht: #2b2a8c;
+
+  --mint: #3ddc97;
+  --plum: #3b1033;
+  --schiefer: #3a3a4a;
+
+  --ein: cubic-bezier(0.2, 0, 0, 1);
+  --aus: cubic-bezier(0.4, 0, 1, 1);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--buehne);
+  color: var(--papier);
+  font-family: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  overscroll-behavior: none;
+}
+
+.buzzer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+}
+
+.oben {
+  flex: 0 0 auto;
+  text-align: center;
+  color: var(--gedaempft);
+  font-size: 16px;
+  min-height: 22px;
+}
+
+.zeitleiste {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--flaeche);
+  overflow: hidden;
+}
+
+.zeitleiste > i {
+  display: block;
+  height: 100%;
+  background: var(--sonne);
+}
+
+.feld {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+  min-height: 0;
+}
+
+.unten {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--gedaempft);
+}
+
+/* --- Beitritt ----------------------------------------------------------- */
+h1.marke {
+  font-size: 20px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gedaempft);
+  margin: 0;
+}
+
+.frageText {
+  font-size: 22px;
+  color: var(--gedaempft);
+  margin: 0;
+}
+
+input {
+  font: inherit;
+  width: 100%;
+  max-width: 420px;
+  padding: 18px;
+  border-radius: 14px;
+  border: 2px solid var(--linie);
+  background: var(--flaeche);
+  color: var(--papier);
+  text-align: center;
+}
+
+input.code {
+  font-size: 40px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+input.name {
+  font-size: 28px;
+}
+
+.wackelt {
+  animation: wackeln 160ms var(--aus);
+}
+
+@keyframes wackeln {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-8px);
+  }
+  75% {
+    transform: translateX(8px);
+  }
+}
+
+button.aktion {
+  font: inherit;
+  font-size: 22px;
+  font-weight: 600;
+  width: 100%;
+  max-width: 420px;
+  min-height: 72px;
+  border-radius: 14px;
+  border: 2px solid var(--sonne);
+  background: var(--sonne);
+  color: var(--tinte);
+}
+
+button.aktion:disabled {
+  background: transparent;
+  border-color: var(--linie);
+  color: var(--gedaempft);
+}
+
+.fehler {
+  color: var(--sonne);
+  font-size: 16px;
+  margin: 0;
+}
+
+/* --- Kacheln ------------------------------------------------------------ */
+.kacheln {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  height: 78%;
+}
+
+.kacheln.quad {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.kacheln.duo {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+button.kachel {
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  border-radius: 20px;
+  /* Auf dem Handy 2 px: die Kachelgrenze, nicht Dekor. */
+  border: 2px solid var(--papier);
+  color: var(--papier);
+  background: var(--flaeche);
+  padding: 0;
+  transition:
+    transform 180ms var(--ein),
+    opacity 180ms var(--ein);
+}
+
+button.kachel.sonne {
+  background: var(--sonne);
+  color: var(--tinte);
+}
+button.kachel.welle {
+  background: var(--welle);
+  color: var(--tinte);
+}
+button.kachel.glut {
+  background: var(--glut);
+  color: var(--papier);
+}
+button.kachel.nacht {
+  background: var(--nacht);
+  color: var(--papier);
+}
+
+/* Lesefenster: Formen als Umriss, Farben auf 35 Prozent, kein Text. */
+button.kachel.gesperrt {
+  opacity: 0.35;
+  transform: scale(0.96);
+}
+
+button.kachel.gewackelt {
+  animation: wackeln 120ms var(--aus);
+}
+
+button.kachel:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+/* --- Vollbildzustände --------------------------------------------------- */
+.vollbild {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  padding: 24px;
+}
+
+.vollbild.richtig {
+  background: var(--mint);
+  color: var(--tinte);
+}
+.vollbild.falsch {
+  background: var(--plum);
+  color: var(--papier);
+}
+.vollbild.neutral {
+  background: var(--schiefer);
+  color: var(--papier);
+}
+.vollbild.sonne {
+  background: var(--sonne);
+  color: var(--tinte);
+}
+.vollbild.welle {
+  background: var(--welle);
+  color: var(--tinte);
+}
+.vollbild.glut {
+  background: var(--glut);
+  color: var(--papier);
+}
+.vollbild.nacht {
+  background: var(--nacht);
+  color: var(--papier);
+}
+
+.glyph {
+  font-size: 96px;
+  line-height: 1;
+}
+
+.wort {
+  font-size: 40px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.punkte {
+  font-size: 64px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.einordnung {
+  font-size: 18px;
+  margin: 0;
+  opacity: 0.85;
+}
+
+.gross {
+  font-size: 64px;
+  font-weight: 700;
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
