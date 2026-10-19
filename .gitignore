@@ -2,3 +2,6 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
+
+# Agent-Memory der Werkzeuge, kein Projektinhalt
+.claude/agent-memory/
