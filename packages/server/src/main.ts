@@ -1,8 +1,18 @@
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
+import { makeRequestListener } from './http/requestListener.js';
 import { makeStaticHandler } from './http/static.js';
 import { attachGateway } from './transport/socketio/gateway.js';
+
+// Zusaetzliches Netz, kein Ersatz fuer die Behandlung an der Fehlerstelle:
+// ein uebersehener Pfad darf den Abend nicht beenden.
+process.on('uncaughtException', (error: unknown) => {
+  console.error('[quizbude] Unbehandelter Fehler - der Server laeuft weiter:', error);
+});
+process.on('unhandledRejection', (reason: unknown) => {
+  console.error('[quizbude] Unbehandelte Ablehnung - der Server laeuft weiter:', reason);
+});
 
 const PORT = Number(process.env['PORT'] ?? 3000);
 
@@ -14,19 +24,7 @@ const serveStatic = makeStaticHandler([
   { prefix: '/play/', dir: playerDir },
 ]);
 
-const http = createServer((req, res) => {
-  const url = req.url ?? '/';
-  if (url === '/' || url === '/index.html') {
-    res.writeHead(302, { location: '/play/' });
-    res.end();
-    return;
-  }
-  void serveStatic(req, res).then((handled) => {
-    if (!handled) {
-      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Nicht gefunden');
-    }
-  });
-});
+const http = createServer(makeRequestListener(serveStatic));
 
 const io = new Server(http, {
   // Harte Betriebsvorgabe aus Konzept 6.6: eingeschaltet reserviert zlib

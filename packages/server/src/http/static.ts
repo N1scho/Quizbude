@@ -35,7 +35,19 @@ async function tryFile(path: string): Promise<boolean> {
 export function makeStaticHandler(mounts: readonly Mount[]) {
   return async function serve(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const url = new URL(req.url ?? '/', 'http://localhost');
-    const pathname = decodeURIComponent(url.pathname);
+
+    // decodeURIComponent wirft bei jeder ungueltigen Prozent-Sequenz. Ein
+    // abgetippter Link mit einem verschluckten Zeichen hinter dem Prozent
+    // genuegt - das darf eine Fehlerantwort kosten, nie den Prozess.
+    let pathname: string;
+    try {
+      pathname = decodeURIComponent(url.pathname);
+    } catch {
+      res
+        .writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
+        .end('Ungültiger Pfad');
+      return true;
+    }
 
     for (const mount of mounts) {
       if (pathname + '/' === mount.prefix) {
