@@ -8,6 +8,7 @@ import type {
   ServerMessage,
 } from '@quizbude/protocol';
 import { connect, type Wire } from './wire';
+import { createRoomOnce } from './session';
 import { Shape, slotFor } from './shapes';
 
 type Stage =
@@ -105,7 +106,7 @@ export function App(): JSX.Element {
       }
     });
     wireRef.current = wire;
-    wire.socket.on('connect', () => wire.send({ t: 'host:create' }));
+    createRoomOnce(wire.socket, () => wire.send({ t: 'host:create' }));
     return () => {
       wire.dispose();
       wireRef.current = null;
