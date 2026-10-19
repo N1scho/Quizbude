@@ -12,6 +12,10 @@ export default defineConfig({
       ),
     },
   },
-  server: { port: 5173 },
+  server: {
+    port: 5173,
+    // Im Entwicklungsmodus laeuft der Spielserver getrennt auf 3000.
+    proxy: { '/socket.io': { target: 'http://localhost:3000', ws: true } },
+  },
   build: { outDir: 'dist', emptyOutDir: true },
 });
