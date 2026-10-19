@@ -35,6 +35,13 @@ const io = new Server(http, {
 
 const registry = attachGateway(io);
 
+// Das Netz oben faengt sonst auch einen Startfehler ab und der Prozess
+// endete still mit 0. Ein Server, der nicht hochkommt, muss das sagen.
+http.on('error', (error: unknown) => {
+  console.error('[quizbude] Server kann nicht starten:', error);
+  process.exit(1);
+});
+
 http.listen(PORT, () => {
   console.info(`[quizbude] Bühne      http://localhost:${PORT}/host/`);
   console.info(`[quizbude] Spielgerät http://localhost:${PORT}/play/`);
