@@ -147,7 +147,7 @@ function applyEvent(state: GameState, input: EngineInput, deps: EngineDeps): Ste
     case 'PlayerJoinRequested':
       return onJoin(state, event, at);
     case 'PlayerDisconnected':
-      return onDisconnect(state, event.playerId, deps);
+      return onDisconnect(state, event.playerId, at, deps);
     case 'HostStartedGame':
       return onHostStart(state, event.expectedPhase, at, deps);
     case 'HostAdvanced':
@@ -255,7 +255,12 @@ function onJoin(
   };
 }
 
-function onDisconnect(state: GameState, playerId: PlayerId, deps: EngineDeps): StepResult {
+function onDisconnect(
+  state: GameState,
+  playerId: PlayerId,
+  at: MonoMs,
+  deps: EngineDeps,
+): StepResult {
   const player = state.players.get(playerId);
   if (player === undefined) return { state, effects: [] };
 
@@ -276,7 +281,10 @@ function onDisconnect(state: GameState, playerId: PlayerId, deps: EngineDeps): S
   ];
 
   if (next.phase === 'OPEN') {
-    const settled = maybeSettle(next, next.lastInputAt, deps);
+    // Die Uhr der Eingabe, nicht lastInputAt: touch() setzt dieses Feld erst
+    // am Ende von step, es traegt also noch den Zeitpunkt der VORHERIGEN
+    // Eingabe. Die Gnadenfrist waere sonst verbraucht, bevor sie beginnt.
+    const settled = maybeSettle(next, at, deps);
     next = settled.state;
     effects.push(...settled.effects);
   }
