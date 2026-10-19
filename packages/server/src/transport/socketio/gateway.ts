@@ -14,7 +14,6 @@ import {
 import {
   WIRE_CHANNEL,
   asPlayerId,
-  type ClientMessage,
   type PlayerId,
   type RoomCode,
   type ServerMessage,
@@ -26,6 +25,7 @@ import { RoomHandle } from '../../runtime/roomHandle.js';
 import { RoomRegistry } from '../../runtime/roomRegistry.js';
 import { newToken } from '../../runtime/tokens.js';
 import { makeEffectSink } from './outbound.js';
+import { parseClientMessage } from './validate.js';
 import { attachClockSync, recordPong, rttMinOf, socketState } from './clockSync.js';
 
 const send = (socket: Socket, message: ServerMessage): void => {
@@ -44,7 +44,14 @@ export function attachGateway(io: Server): RoomRegistry {
       // Der Zeitstempel entsteht als ERSTE Anweisung im Handler - vor jeder
       // Validierung, jedem await, jeder Protokollierung (Konzept 5.2).
       const receivedAt = nowMono();
-      handle(io, registry, questionRegistry, socket, raw, receivedAt);
+      try {
+        handle(io, registry, questionRegistry, socket, raw, receivedAt);
+      } catch (error) {
+        // Ein Fehler kostet diese eine Verbindung, nie den Prozess: am
+        // Prozess haengt der gesamte Spielzustand jeder laufenden Runde.
+        console.error('[quizbude] Nachricht abgebrochen:', error);
+        socket.disconnect(true);
+      }
     });
 
     socket.on('disconnect', () => {
@@ -74,8 +81,10 @@ function handle(
   raw: unknown,
   receivedAt: ReturnType<typeof nowMono>,
 ): void {
-  const msg = raw as ClientMessage;
-  if (typeof msg !== 'object' || msg === null || typeof msg.t !== 'string') return;
+  // Erst pruefen, dann weiterreichen: alles jenseits dieser Zeile ist
+  // eine vollstaendig gepruefte Nachrichtenform, kein Cast.
+  const msg = parseClientMessage(raw);
+  if (msg === null) return;
   const st = socketState(socket);
 
   switch (msg.t) {
@@ -160,7 +169,7 @@ function handle(
         {
           kind: 'PlayerJoinRequested',
           playerId,
-          displayName: typeof msg.displayName === 'string' ? msg.displayName : '',
+          displayName: msg.displayName,
           origin: 'web',
           resumeToken: newToken(),
         },

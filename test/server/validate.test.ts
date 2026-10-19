@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest';
+import { parseClientMessage } from '../../packages/server/src/transport/socketio/validate.js';
+
+/** B2: Jede Nachrichtenform wird vollstaendig geprueft, nicht nur ihr Feld `t`. */
+
+describe('parseClientMessage', () => {
+  it('nimmt jede gueltige Nachrichtenform an', () => {
+    expect(parseClientMessage({ t: 'host:create' })).toEqual({ t: 'host:create' });
+    expect(parseClientMessage({ t: 'host:start', expectedPhase: 'LOBBY' })).toEqual({
+      t: 'host:start',
+      expectedPhase: 'LOBBY',
+    });
+    expect(parseClientMessage({ t: 'host:advance', expectedPhase: 'REVEAL' })).toEqual({
+      t: 'host:advance',
+      expectedPhase: 'REVEAL',
+    });
+    expect(
+      parseClientMessage({ t: 'player:join', roomCode: 'abc234', displayName: 'Anna' }),
+    ).toEqual({ t: 'player:join', roomCode: 'abc234', displayName: 'Anna' });
+    expect(parseClientMessage({ t: 'player:answer', questionSeq: 0, optionIndex: 3 })).toEqual({
+      t: 'player:answer',
+      questionSeq: 0,
+      optionIndex: 3,
+    });
+    expect(parseClientMessage({ t: 'clock:ping', seq: 1, clientTime: 1234.5 })).toEqual({
+      t: 'clock:ping',
+      seq: 1,
+      clientTime: 1234.5,
+    });
+    expect(parseClientMessage({ t: 'clock:pong', seq: 2 })).toEqual({ t: 'clock:pong', seq: 2 });
+  });
+
+  it('nimmt nur die Felder der Form an und schleppt nichts weiter', () => {
+    const parsed = parseClientMessage({
+      t: 'player:join',
+      roomCode: 'ABC234',
+      displayName: 'Anna',
+      schmuggel: 'hier bin ich',
+    });
+    expect(parsed).toEqual({ t: 'player:join', roomCode: 'ABC234', displayName: 'Anna' });
+  });
+
+  it('weist roomCode als Zahl zurueck - das ist B2', () => {
+    expect(
+      parseClientMessage({ t: 'player:join', roomCode: 123456, displayName: 'Mallory' }),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['kein Objekt', null],
+    ['Zahl', 42],
+    ['Zeichenkette', 'host:create'],
+    ['Feld t fehlt', {}],
+    ['t keine Zeichenkette', { t: 42 }],
+    ['unbekannte Art', { t: 'es:gibt:mich:nicht' }],
+    ['Array', []],
+    ['join ohne Felder', { t: 'player:join' }],
+    ['join mit Objekt', { t: 'player:join', roomCode: {}, displayName: 'x' }],
+    ['join mit Array als Name', { t: 'player:join', roomCode: 'A', displayName: [] }],
+    ['join zu lang', { t: 'player:join', roomCode: 'A'.repeat(257), displayName: 'x' }],
+    ['start ohne Phase', { t: 'host:start' }],
+    ['start mit unbekannter Phase', { t: 'host:start', expectedPhase: 'KEINE_PHASE' }],
+    ['advance mit Zahl', { t: 'host:advance', expectedPhase: 7 }],
+    ['answer mit Zeichenkette', { t: 'player:answer', questionSeq: '0', optionIndex: 0 }],
+    ['answer mit Bruch', { t: 'player:answer', questionSeq: 0, optionIndex: 1.5 }],
+    ['answer mit NaN', { t: 'player:answer', questionSeq: Number.NaN, optionIndex: 0 }],
+    ['ping mit Zeichenkette', { t: 'clock:ping', seq: 'eins', clientTime: 0 }],
+    ['ping mit Unendlich', { t: 'clock:ping', seq: 1, clientTime: Number.POSITIVE_INFINITY }],
+    ['pong ohne seq', { t: 'clock:pong', seq: null }],
+  ])('weist %s zurueck', (_name, payload) => {
+    expect(parseClientMessage(payload)).toBeNull();
+  });
+});
