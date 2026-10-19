@@ -22,6 +22,27 @@ const FORBIDDEN: readonly { readonly pattern: RegExp; readonly why: string }[] =
   { pattern: /\brequire\(/, why: 'CommonJS-Ladepfad' },
 ];
 
+/**
+ * Jede Importform, nicht nur `from '...'`: beide Anfuehrungszeichen,
+ * Seiteneffekt-Importe, dynamische Importe und require.
+ */
+const SPECIFIER_RE = /(?:\bfrom\s*|\bimport\s*|\brequire\s*)\(?\s*['"]([^'"]+)['"]/g;
+
+export function specifiersOf(source: string): string[] {
+  const out: string[] = [];
+  for (const line of source.split('\n')) {
+    // Kommentarzeilen duerfen Importe nennen, ohne welche zu sein.
+    const code = line.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, '');
+    SPECIFIER_RE.lastIndex = 0;
+    let m: RegExpExecArray | null = SPECIFIER_RE.exec(code);
+    while (m !== null) {
+      out.push(m[1] as string);
+      m = SPECIFIER_RE.exec(code);
+    }
+  }
+  return out;
+}
+
 function walk(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
@@ -54,19 +75,42 @@ describe('Purity von core', () => {
     });
   }
 
+  it('die Importpruefung erkennt jede Schreibweise', () => {
+    // Ein Muster, das nur `from '...'` kennt, laesst doppelte
+    // Anfuehrungszeichen, Seiteneffekt-Importe und dynamische Importe
+    // unentdeckt durch - und damit genau die Erosion, gegen die es steht.
+    expect(specifiersOf(`import "node:crypto";`)).toEqual(['node:crypto']);
+    expect(specifiersOf(`import { randomUUID } from "node:crypto";`)).toEqual(['node:crypto']);
+    expect(specifiersOf(`import 'node:crypto';`)).toEqual(['node:crypto']);
+    expect(specifiersOf(`export const load = () => import('node:crypto');`)).toEqual([
+      'node:crypto',
+    ]);
+    expect(specifiersOf(`export const load = () => import("node:crypto");`)).toEqual([
+      'node:crypto',
+    ]);
+    expect(specifiersOf(`export * from './x.js';`)).toEqual(['./x.js']);
+    expect(specifiersOf(`export type { A } from "@quizbude/protocol";`)).toEqual([
+      '@quizbude/protocol',
+    ]);
+    expect(specifiersOf(`const fs = require("node:fs");`)).toEqual(['node:fs']);
+    expect(specifiersOf(`// import 'node:crypto';`)).toEqual([]);
+  });
+
+  it('die Importpruefung findet in core ueberhaupt Importe', () => {
+    // Ohne diese Zusicherung waere ein kaputtes Muster still gruen.
+    const all = files.flatMap((file) => specifiersOf(readFileSync(file, 'utf8')));
+    expect(all.length).toBeGreaterThan(20);
+    expect(all).toContain('@quizbude/protocol');
+  });
+
   it('importiert ausser protocol kein weiteres Paket', () => {
     const offenders: string[] = [];
     for (const file of files) {
-      const source = readFileSync(file, 'utf8');
-      const re = /from\s+'([^']+)'/g;
-      let m: RegExpExecArray | null = re.exec(source);
-      while (m !== null) {
-        const spec = m[1] as string;
+      for (const spec of specifiersOf(readFileSync(file, 'utf8'))) {
         const isRelative = spec.startsWith('.');
         if (!isRelative && spec !== '@quizbude/protocol') {
           offenders.push(`${file}: ${spec}`);
         }
-        m = re.exec(source);
       }
     }
     expect(offenders).toEqual([]);
