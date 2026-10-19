@@ -6,6 +6,11 @@ import type { PlayerId } from './ids.js';
  * Es gibt in diesem Typ kein Feld, in dem Korrektheit stehen koennte.
  * Dass die Loesung vor REVEAL nicht hinausgeht, ist damit ein Typfehler
  * und keine Disziplinfrage (Architekturkonzept 4.2).
+ *
+ * Das gilt auf beiden Achsen: welche Felder eine Nachricht traegt, steht
+ * hier; an welchen Empfaengerkreis sie gehen darf, bindet `SendEffect` in
+ * core/engine/effects.ts. Eine Buehnennachricht an die Spielergeraete ist
+ * ebenfalls ein Typfehler.
  */
 export interface PublicQuestionView {
   readonly seq: number;

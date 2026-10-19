@@ -178,7 +178,7 @@ function rosterEntries(state: GameState): RosterEntry[] {
   }));
 }
 
-function rosterMessage(state: GameState): ServerMessage {
+function rosterMessage(state: GameState): Extract<ServerMessage, { t: 'room:roster' }> {
   const players = rosterEntries(state);
   return {
     t: 'room:roster',
