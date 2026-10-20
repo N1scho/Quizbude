@@ -11,7 +11,7 @@ Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle du
 ```
 npm test        105 Tests, 12 Dateien, grün, Exit 0
 npx tsc         Exit 0  (strict: true aus tsconfig.base.json)
-npm run build   Exit 0  (Spielergerät 193,59 kB │ gzip 61,82 kB)
+npm run build   Exit 0  (Spielergerät: kritischer Pfad 63,45 kB gzip)
 Arbeitsbaum     sauber
 ```
 
@@ -32,7 +32,7 @@ Die zweite Welle hat sie geschlossen, jede mit eigener Rücknahmeprobe. Einzelhe
 ## Entschieden: die beiden Nutzerentscheidungen sind gefallen
 
 - **Lesefenster.** Die 10-Sekunden-Kappung **entfällt als Obergrenze**. Das Fenster wird dynamisch berechnet und hat eine **Mindestdauer von 10 s je Frage** (`READING_MIN_MS = 10000`, kein `READING_MAX_MS` mehr). Eine Frage an der 200-Zeichen-Grenze bekommt damit ihre 15,3 s statt gekappter 10 s; früher freigeben kann der Host jederzeit mit der Leertaste. Umgesetzt in `d0959a4`, nachgezogen in `konzept-ux.md` Abschnitt 3.
-- **Ladebudget.** Das Budget der Beitrittsseite steht auf **65 kB gzip** (vorher 60 kB). Gemessen sind 61,82 kB mit React plus socket.io-client; die knapp zwei Kilobyte Abstand sind am Gerät nicht spürbar, und der Umbau, der sie einspart, kostet mehr, als er bringt. **React bleibt, kein Umbau.** Umgesetzt in `5c13d20`, nachgezogen in `konzept-ux.md` Abschnitt 6 und `konzept-architektur.md` 6.6.
+- **Ladebudget.** Das Budget der Beitrittsseite steht auf **65 kB gzip** (vorher 60 kB). Es meint den ganzen kritischen Pfad, nicht nur das JavaScript-Bündel; gemessen sind 63,45 kB mit React plus socket.io-client (0,31 kB HTML, 1,32 kB CSS, 61,82 kB JavaScript). Die 1,55 kB Abstand sind am Gerät nicht spürbar, und der Umbau, der Luft schaffen würde, kostet mehr, als er bringt. **React bleibt, kein Umbau.** Umgesetzt in `5c13d20`, nachgezogen in `konzept-ux.md` Abschnitt 6 und `konzept-architektur.md` 6.6.
 
 Dazu unverändert: `PLAYER_HARD_CAP` steht auf 5000 — die hergeleitete Fairnessgrenze, kein Produktlimit.
 
