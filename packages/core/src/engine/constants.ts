@@ -23,11 +23,17 @@ export const PLAYER_SOFT_WARN = 25;
 export const PLAYER_HARD_CAP = 5000;
 
 // --- Lesefenster (UX-Konzept Abschnitt 3) ---------------------------------
+/**
+ * Das Lesefenster ist dynamisch und hat KEINE Obergrenze: eine lange Frage
+ * bekommt die Zeit, die sie nach der Formel braucht. Nach unten gilt eine
+ * Mindestdauer von 10 s je Frage - darunter geht es nie, auch nicht bei
+ * "Wahr oder falsch?". Den Rhythmus schuetzt nicht mehr eine Kappung,
+ * sondern der Host: die Leertaste gibt jederzeit frueher frei.
+ */
 export const READING_BASE_MS = 1500;
 export const READING_PER_PROMPT_WORD_MS = 400;
 export const READING_PER_OPTION_WORD_MS = 150;
-export const READING_MIN_MS = 4000;
-export const READING_MAX_MS = 10000;
+export const READING_MIN_MS = 10000;
 
 // --- Textgrenzen (Ruling 2 des Auftrags) ----------------------------------
 export const MAX_PROMPT_CHARS = 200;

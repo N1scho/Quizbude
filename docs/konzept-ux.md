@@ -265,14 +265,14 @@ Benennung: `B` = Bühne (Host), `Z` = Buzzer (Spieler).
 
 ## 3. Der Spannungsbogen einer Frage
 
-Default-Antwortzeit 20 s. T = 0 ist die Freigabe der Antworten.
+Default-Antwortzeit 20 s. T = 0 ist die Freigabe der Antworten. Die Zeiten vor T0 gelten für die **Mindestdauer** des Lesefensters von 10 s (Formel weiter unten); eine längere Frage schiebt den Anfang entsprechend nach vorn, der Ablauf bleibt derselbe.
 
 | Zeit | Bühne | Buzzer | Begründung |
 |---|---|---|---|
-| **T−8,0 bis T−5,0** | Zwischenstand verblasst, Ankündigung: „Frage 3 / 10" groß, Punktewert, Hintergrund pulsiert einmal | Kacheln verschwinden, nur Fragennummer, ruhiger Puls | Reset der Aufmerksamkeit. Alle Köpfe gehen hoch, bevor Information kommt |
-| **T−5,0** | Fragentext erscheint, Zeile für Zeile (je 120 ms), Bild blendet mit auf. Timer sichtbar, **steht still** | Kacheln erscheinen als Umriss, 35 % Deckkraft, Label „Lesen" | Lesefenster. Der Timer steht sichtbar still — das ist die Zusage, dass Lesen nicht bestraft wird |
-| **T−5,0 bis T−0,6** | Antwortkacheln erscheinen nacheinander (je 90 ms versetzt), vollflächig farbig | unverändert gesperrt; Tippen quittiert nur mit 120-ms-Wackeln | Formen und Positionen werden vorab verankert, bevor der Druck beginnt |
-| **T−0,6 bis T0** | Timerring färbt sich, ein kurzer Ton, Countdown „3·2·1" nur wenn Lesefenster ≥ 7 s | Kacheln „schnappen" in 180 ms auf volle Farbe und Größe, **eine kurze Vibration (10 ms)** | Der physische Moment der Freigabe. Niemand muss hinschauen, um zu merken, dass es losgeht |
+| **T−13,0 bis T−10,0** | Zwischenstand verblasst, Ankündigung: „Frage 3 / 10" groß, Punktewert, Hintergrund pulsiert einmal | Kacheln verschwinden, nur Fragennummer, ruhiger Puls | Reset der Aufmerksamkeit. Alle Köpfe gehen hoch, bevor Information kommt |
+| **T−10,0** | Fragentext erscheint, Zeile für Zeile (je 120 ms), Bild blendet mit auf. Timer sichtbar, **steht still** | Kacheln erscheinen als Umriss, 35 % Deckkraft, Label „Lesen" | Lesefenster. Der Timer steht sichtbar still — das ist die Zusage, dass Lesen nicht bestraft wird |
+| **T−10,0 bis T−0,6** | Antwortkacheln erscheinen nacheinander (je 90 ms versetzt), vollflächig farbig | unverändert gesperrt; Tippen quittiert nur mit 120-ms-Wackeln | Formen und Positionen werden vorab verankert, bevor der Druck beginnt |
+| **T−0,6 bis T0** | Timerring färbt sich, ein kurzer Ton, Countdown „3·2·1" (das Lesefenster ist mit der Mindestdauer 10 s immer lang genug dafür) | Kacheln „schnappen" in 180 ms auf volle Farbe und Größe, **eine kurze Vibration (10 ms)** | Der physische Moment der Freigabe. Niemand muss hinschauen, um zu merken, dass es losgeht |
 | **T0** | Timer läuft, Antwortzähler bei 0 | aktiv | |
 | **T0 bis T+6** | Antwortzähler tickt hoch, sonst nichts. **Keine Verteilung, keine Namen** | Jeder Tap: Kachel 0,96 skaliert, Rahmen verdickt, Haptik, dann Vollbild-Form „Abgegeben" | Wer schnell antwortet, bekommt Ruhe — und schaut dadurch zu den anderen |
 | **T+6 bis T+15** | Timerring wird ab 50 % kräftiger, ab 25 % pulsiert er im Sekundentakt | Wartende sehen „14 von 18 sind fertig" | Der Zähler ist die Dramaturgie. Er erzeugt Druck, ohne jemanden zu benennen |
@@ -290,12 +290,12 @@ Rechnung: stilles Lesen liegt bei Erwachsenen bei 200–250 Wörtern/Minute; im 
 
 ```
 Lesefenster = 1,5 s  +  0,40 s × Wörter(Frage)  +  0,15 s × Wörter(alle Antworten)
-              begrenzt auf 4,0 s … 10,0 s
+              Mindestdauer 10,0 s, nach oben offen
 ```
 
-Beispiele: kurze Frage (8 Wörter) mit vier Ein-Wort-Antworten → 1,5 + 3,2 + 0,6 = **5,3 s**. Lange Frage (20 Wörter, 120-Zeichen-Maximum) mit vier dreiwortigen Antworten → 1,5 + 8,0 + 1,8 = **11,3 s → gekappt auf 10 s**. Wahr/Falsch mit 6 Wörtern → 1,5 + 2,4 + 0,3 = **4,2 s**.
+Beispiele: kurze Frage (8 Wörter) mit vier Ein-Wort-Antworten → 1,5 + 3,2 + 0,6 = 5,3 s → **Mindestdauer 10 s**. Lange Frage (20 Wörter) mit vier dreiwortigen Antworten → 1,5 + 8,0 + 1,8 = **11,3 s**. Eine Frage an der 200-Zeichen-Grenze (rund 30 Wörter) mit denselben Antworten → 1,5 + 12,0 + 1,8 = **15,3 s**. Wahr/Falsch mit 6 Wörtern → 1,5 + 2,4 + 0,3 = 4,2 s → **Mindestdauer 10 s**.
 
-Die Untergrenze von 4 s ist nicht verhandelbar: darunter reicht die Zeit nicht einmal für die Sakkade vom Handy zur Leinwand plus Fixierung. Die Obergrenze von 10 s schützt den Rhythmus — der Host kann jederzeit mit der Leertaste früher freigeben, und tut das in der Praxis, sobald die Blicke oben sind. Das Lesefenster ist der Preis dafür, dass der Fragentext nicht auf dem Handy steht; ohne es wäre Regel 3 unfair statt elegant.
+Die Mindestdauer von 10 s je Frage ist gesetzt: jede Frage steht mindestens zehn Sekunden lesbar auf der Leinwand, auch die kürzeste. Eine Obergrenze gibt es nicht mehr. Die frühere Kappung bei 10 s war unter der Annahme 120 Zeichen Fragetext hergeleitet; mit den gesetzten 200 Zeichen hätte sie als Regel statt als Ausnahme gegriffen und ausgerechnet den langen Fragen die Lesezeit genommen, die sie brauchen. Den Rhythmus schützt stattdessen der Host: die Leertaste gibt jederzeit früher frei, und in der Praxis tut er das, sobald die Blicke oben sind. Das Lesefenster ist der Preis dafür, dass der Fragentext nicht auf dem Handy steht; ohne es wäre Regel 3 unfair statt elegant.
 
 ---
 
