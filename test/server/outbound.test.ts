@@ -158,8 +158,17 @@ function mitschnitt(client: Client): ServerMessage[] {
 /**
  * Sperre: nach dem Pong ist jede Nachricht zugestellt, die der Server vor
  * dem Ping auf denselben Socket geschrieben hat - Socket.IO haelt die
- * Reihenfolge je Verbindung. Ohne diese Sperre koennte die Pruefung vor dem
- * Leck laufen und waere still gruen.
+ * Reihenfolge je Verbindung.
+ *
+ * Was sie hier NICHT ist: der tragende Riegel. Im Nachreview fiel die
+ * Mutation "scope host zusaetzlich an channels.players" auch mit entfernten
+ * sperre-Aufrufen in drei Laeufen hintereinander gleich rot - die leckende
+ * Nachricht geht der erwarteten auf demselben Socket voraus und steht
+ * deshalb schon im Mitschnitt, wenn das await zurueckkommt. Der Beweis ist
+ * nicht die Sperre, sondern dass das Leck mit echten Texten beobachtet
+ * wurde. Die Sperre bleibt als Guertel zum Hosentraeger: sie schadet nicht
+ * und traegt, falls sich diese Reihenfolge einmal aendert. Wer sie als
+ * Beweis anfuehrt, fuehrt eine Zusage an, die hier nichts getragen hat.
  */
 async function sperre(client: Client, seq: number): Promise<void> {
   client.sendRaw({ t: 'clock:ping', seq, clientTime: 1 });
