@@ -42,40 +42,82 @@ function fakeSocket(): { source: ConnectSource; connect: () => void } {
 }
 
 describe('Raum genau einmal je Sitzung', () => {
-  it('erzeugt den Raum bei der ersten Verbindung', () => {
+  it('erzeugt den Raum erst, wenn er gewollt ist - nicht schon beim Verbinden', () => {
+    // Seit dem Fragen-Upload faellt die Entscheidung nach dem Pruefbericht.
+    // Ein Raum beim Verbinden hiesse: der Code steht auf der Leinwand,
+    // bevor jemand weiss, ob die Fragen ueberhaupt taugen.
     const socket = fakeSocket();
     let erzeugt = 0;
-    createRoomOnce(socket.source, () => {
+    createRoomOnce<string>(socket.source, () => {
       erzeugt += 1;
     });
+    socket.connect();
+    socket.connect();
     expect(erzeugt).toBe(0);
+  });
+
+  it('erzeugt den Raum beim Zuruf, wenn die Leitung schon steht', () => {
+    const socket = fakeSocket();
+    const gesehen: string[] = [];
+    const oeffne = createRoomOnce<string>(socket.source, (q) => gesehen.push(q));
+    socket.connect();
+    oeffne('runde-a');
+    expect(gesehen).toEqual(['runde-a']);
+  });
+
+  it('wartet auf die Leitung, wenn der Zuruf zuerst kommt', () => {
+    const socket = fakeSocket();
+    const gesehen: string[] = [];
+    const oeffne = createRoomOnce<string>(socket.source, (q) => gesehen.push(q));
+    oeffne('runde-a');
+    expect(gesehen).toEqual([]);
+    socket.connect();
+    expect(gesehen).toEqual(['runde-a']);
+  });
+
+  it('erzeugt bei jeder Wiederverbindung und jedem weiteren Klick KEINEN zweiten Raum', () => {
+    const socket = fakeSocket();
+    let erzeugt = 0;
+    const oeffne = createRoomOnce<string>(socket.source, () => {
+      erzeugt += 1;
+    });
+    socket.connect();
+    oeffne('a');
+    oeffne('b');
+    socket.connect();
+    oeffne('c');
+    socket.connect();
     socket.connect();
     expect(erzeugt).toBe(1);
   });
 
-  it('erzeugt bei jeder Wiederverbindung KEINEN zweiten Raum', () => {
+  it('meldet jede Verbindung, damit die Buehne keinen eigenen Handler braucht', () => {
     const socket = fakeSocket();
-    let erzeugt = 0;
-    createRoomOnce(socket.source, () => {
-      erzeugt += 1;
-    });
+    let verbindungen = 0;
+    createRoomOnce<string>(
+      socket.source,
+      () => undefined,
+      () => {
+        verbindungen += 1;
+      },
+    );
     socket.connect();
     socket.connect();
-    socket.connect();
-    socket.connect();
-    expect(erzeugt).toBe(1);
+    expect(verbindungen).toBe(2);
   });
 
   it('haelt zwei Sitzungen auseinander', () => {
     const a = fakeSocket();
     const b = fakeSocket();
     const codes: string[] = [];
-    createRoomOnce(a.source, () => codes.push('a'));
-    createRoomOnce(b.source, () => codes.push('b'));
-    a.connect();
+    const oeffneA = createRoomOnce<string>(a.source, () => codes.push('a'));
+    const oeffneB = createRoomOnce<string>(b.source, () => codes.push('b'));
     a.connect();
     b.connect();
-    b.connect();
+    oeffneA('x');
+    oeffneA('x');
+    oeffneB('y');
+    oeffneB('y');
     expect(codes).toEqual(['a', 'b']);
   });
 
@@ -84,7 +126,8 @@ describe('Raum genau einmal je Sitzung', () => {
       fileURLToPath(new URL('../../apps/host-web/src/App.tsx', import.meta.url)),
       'utf8',
     );
-    expect(app).toContain("createRoomOnce(wire.socket, () => wire.send({ t: 'host:create' }))");
+    expect(app).toContain("wire.send({ t: 'host:create', quiz })");
+    expect(app).toContain('createRoomOnce<QuizPayload>(');
     // Ein roher connect-Handler in der Buehne waere genau der Rueckfall.
     //
     // NR1: Der Waechter darf nicht an der Anfuehrungsart haengen. Das Projekt

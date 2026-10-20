@@ -19,6 +19,7 @@ import {
   type ServerMessage,
 } from '@quizbude/protocol';
 import { loadDemoQuiz } from '../../demoQuiz.js';
+import { loadUploadedQuiz } from '../../uploadedQuiz.js';
 import { nowMono, serverTimeMs } from '../../runtime/clock.js';
 import { drawFreeCode, normalizeCode } from '../../runtime/codes.js';
 import { RoomHandle } from '../../runtime/roomHandle.js';
@@ -102,8 +103,23 @@ function handle(
       return;
 
     case 'host:create': {
+      // Erst die Fragen, dann der Code: an einer Sammlung, die core
+      // ablehnt, soll kein Raumcode verbraucht werden.
+      let quiz;
+      try {
+        quiz =
+          msg.quiz === undefined
+            ? loadDemoQuiz(questionRegistry)
+            : loadUploadedQuiz(msg.quiz, questionRegistry);
+      } catch (error) {
+        send(socket, {
+          t: 'room:error',
+          code: 'quiz_invalid',
+          message: error instanceof Error ? error.message : 'Die Fragen liessen sich nicht laden.',
+        });
+        return;
+      }
       const code = drawFreeCode((c) => registry.has(c));
-      const quiz = loadDemoQuiz(questionRegistry);
       const config: RoomConfig = {
         roomCode: code,
         hostToken: newToken(),

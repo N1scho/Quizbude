@@ -345,6 +345,174 @@ button.weiter:not(:disabled):active {
   color: var(--gedaempft);
 }
 
+/* --- Fragen laden ------------------------------------------------------- */
+/* Dieser Bildschirm wird am Laptop bedient, nicht vom Sofa aus gelesen.
+   Deshalb gewoehnliche Schriftgroessen statt Buehnenmass - und scrollbar. */
+.laden-mitte {
+  justify-content: flex-start;
+  align-items: stretch;
+  overflow-y: auto;
+}
+
+.laden {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  font-size: 17px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.laden h1 {
+  font-size: 34px;
+  margin: 0;
+}
+
+.laden h2 {
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+
+.laden label {
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--gedaempft);
+}
+
+.unterzeile {
+  color: var(--gedaempft);
+  font-size: 15px;
+  margin: 0;
+}
+
+.kasten {
+  background: var(--flaeche);
+  border: 1px solid var(--linie);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.anweisung {
+  white-space: pre-wrap;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--buehne);
+  border: 1px solid var(--linie);
+  border-radius: 12px;
+  padding: 14px;
+  max-height: 240px;
+  overflow: auto;
+  margin: 10px 0;
+  user-select: all;
+}
+
+.ablage {
+  border: 2px dashed var(--linie);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  transition:
+    border-color 150ms var(--ein),
+    background 150ms var(--ein);
+}
+
+.ablage.bereit {
+  border-color: var(--sonne);
+  background: rgba(255, 201, 77, 0.1);
+}
+
+.ablage p {
+  margin: 0 0 8px;
+}
+
+.laden textarea {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 260px;
+  resize: vertical;
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--linie);
+  background: var(--flaeche);
+  color: var(--papier);
+}
+
+.knopfreihe {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.laden button.still {
+  font: inherit;
+  font-size: 16px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 2px solid var(--linie);
+  background: transparent;
+  color: var(--papier);
+  cursor: pointer;
+}
+
+.laden button.weiter {
+  font-size: 20px;
+  padding: 12px 28px;
+}
+
+.bericht {
+  background: var(--flaeche);
+  border: 1px solid var(--linie);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.bericht dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 16px;
+  margin: 0 0 10px;
+  align-items: baseline;
+}
+
+.bericht dt {
+  color: var(--gedaempft);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.bericht dd {
+  margin: 0;
+}
+
+.bericht .gut {
+  color: var(--mint);
+  margin: 0;
+}
+
+.bericht ul.maengel {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  color: var(--sonne);
+}
+
+.bericht ul.hinweise {
+  margin: 4px 0 10px;
+  padding-left: 20px;
+  color: var(--gedaempft);
+}
+
+.meldung {
+  color: var(--sonne);
+  margin: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

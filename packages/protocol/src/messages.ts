@@ -15,8 +15,24 @@ export const WIRE_CHANNEL = 'quizbude';
 // Client -> Server
 // ===========================================================================
 
+/**
+ * Eine hochgeladene Fragensammlung, wie die Buehne sie nach dem
+ * Pruefbericht mitschickt.
+ *
+ * `questions` ist bewusst `unknown`: geprueft und normalisiert werden die
+ * Fragen von `loadQuestion` in core - der einen Tuer, an der keine Grenze
+ * vergessen werden kann. Der Transportrand prueft nur Form und Anzahl.
+ * Eine zweite, flachere Pruefung daneben waere genau die Stelle, an der
+ * eine Grenze spaeter auseinanderlaeuft.
+ */
+export interface QuizPayload {
+  readonly title: string;
+  readonly questions: readonly unknown[];
+}
+
 export type ClientMessage =
-  | { readonly t: 'host:create' }
+  /** Ohne `quiz` spielt der Raum die Demorunde des Servers. */
+  | { readonly t: 'host:create'; readonly quiz?: QuizPayload }
   | { readonly t: 'host:start'; readonly expectedPhase: Phase }
   | { readonly t: 'host:advance'; readonly expectedPhase: Phase }
   | { readonly t: 'player:join'; readonly roomCode: string; readonly displayName: string }

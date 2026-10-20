@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_QUESTIONS } from '@quizbude/core';
 import { parseClientMessage } from '../../packages/server/src/transport/socketio/validate.js';
 
 /** B2: Jede Nachrichtenform wird vollstaendig geprueft, nicht nur ihr Feld `t`. */
@@ -69,5 +70,46 @@ describe('parseClientMessage', () => {
     ['pong ohne seq', { t: 'clock:pong', seq: null }],
   ])('weist %s zurueck', (_name, payload) => {
     expect(parseClientMessage(payload)).toBeNull();
+  });
+});
+
+describe('host:create mit hochgeladener Sammlung', () => {
+  const frage = { id: 'q1', type: 'single_choice', prompt: 'F?', timeLimitMs: 20_000 };
+
+  it('laesst eine Sammlung durch, ohne ihren Inhalt zu beurteilen', () => {
+    // Die inhaltliche Pruefung gehoert core. Haette der Transportrand hier
+    // eine eigene, flachere Fassung der Grenzen, muesste sie bei jeder
+    // Aenderung mitgezogen werden - und genau das geht schief.
+    expect(
+      parseClientMessage({ t: 'host:create', quiz: { title: 'Runde', questions: [frage] } }),
+    ).toEqual({ t: 'host:create', quiz: { title: 'Runde', questions: [frage] } });
+  });
+
+  it('ohne Sammlung bleibt die Nachricht, was sie war', () => {
+    expect(parseClientMessage({ t: 'host:create' })).toEqual({ t: 'host:create' });
+    expect(parseClientMessage({ t: 'host:create', quiz: null })).toEqual({ t: 'host:create' });
+  });
+
+  it('weist eine Sammlung zurueck, deren Form nicht stimmt', () => {
+    const kaputt: readonly unknown[] = [
+      { t: 'host:create', quiz: 42 },
+      { t: 'host:create', quiz: [] },
+      { t: 'host:create', quiz: { title: 'x' } },
+      { t: 'host:create', quiz: { questions: [frage] } },
+      { t: 'host:create', quiz: { title: 7, questions: [frage] } },
+      { t: 'host:create', quiz: { title: 'x', questions: {} } },
+      { t: 'host:create', quiz: { title: 'x', questions: [] } },
+      { t: 'host:create', quiz: { title: 'A'.repeat(257), questions: [frage] } },
+    ];
+    for (const payload of kaputt) expect(parseClientMessage(payload), JSON.stringify(payload)).toBeNull();
+  });
+
+  it('deckelt die Fragenzahl - eine Million Fragen sind kein Quiz, sondern eine Last', () => {
+    const gerade = Array.from({ length: MAX_QUESTIONS }, () => frage);
+    expect(parseClientMessage({ t: 'host:create', quiz: { title: 'x', questions: gerade } })).not
+      .toBeNull();
+    expect(
+      parseClientMessage({ t: 'host:create', quiz: { title: 'x', questions: [...gerade, frage] } }),
+    ).toBeNull();
   });
 });

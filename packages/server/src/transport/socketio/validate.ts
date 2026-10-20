@@ -1,4 +1,5 @@
-import type { ClientMessage, Phase } from '@quizbude/protocol';
+import { MAX_QUESTIONS } from '@quizbude/core';
+import type { ClientMessage, Phase, QuizPayload } from '@quizbude/protocol';
 
 /**
  * Eingangsvalidierung am Transportrand.
@@ -48,14 +49,38 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+/**
+ * Form und Groesse einer hochgeladenen Sammlung - mehr nicht.
+ *
+ * Was in den einzelnen Fragen steht, prueft `loadQuestion` in core. Hier
+ * eine zweite, flachere Pruefung aufzubauen hiesse, dieselbe Grenze an
+ * zwei Stellen zu pflegen; genau daran ist in diesem Projekt schon einmal
+ * ein Waechter zerbrochen.
+ */
+function parseQuizPayload(raw: unknown): QuizPayload | null {
+  if (!isRecord(raw)) return null;
+  const title = raw['title'];
+  const questions = raw['questions'];
+  if (!isShortString(title)) return null;
+  if (!Array.isArray(questions)) return null;
+  if (questions.length < 1 || questions.length > MAX_QUESTIONS) return null;
+  return { title, questions };
+}
+
 export function parseClientMessage(raw: unknown): ClientMessage | null {
   if (!isRecord(raw)) return null;
   const t = raw['t'];
   if (typeof t !== 'string') return null;
 
   switch (t) {
-    case 'host:create':
-      return { t: 'host:create' };
+    case 'host:create': {
+      // Ohne Sammlung bleibt es beim Demo-Quiz des Servers.
+      const quiz = raw['quiz'];
+      if (quiz === undefined || quiz === null) return { t: 'host:create' };
+      const geprueft = parseQuizPayload(quiz);
+      if (geprueft === null) return null;
+      return { t: 'host:create', quiz: geprueft };
+    }
 
     case 'host:start':
     case 'host:advance': {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'rea
 import type {
   Phase,
   PublicQuestionView,
+  QuizPayload,
   RankedPlayer,
   RevealView,
   RosterEntry,
@@ -10,8 +11,11 @@ import type {
 import { connect, type Wire } from './wire';
 import { createRoomOnce } from './session';
 import { Shape, slotFor } from './shapes';
+import { Upload } from './Upload';
 
 type Stage =
+  /** Vor allem anderen: die Fragen. Ohne sie gibt es keinen Raum. */
+  | { k: 'upload' }
   | { k: 'connecting' }
   | { k: 'lobby' }
   | {
@@ -43,7 +47,10 @@ type Stage =
 const NAME_TILE_LIMIT = 25;
 
 export function App(): JSX.Element {
-  const [stage, setStage] = useState<Stage>({ k: 'connecting' });
+  const [stage, setStage] = useState<Stage>({ k: 'upload' });
+  const [bereit, setBereit] = useState(false);
+  const [serverfehler, setServerfehler] = useState<string | null>(null);
+  const oeffne = useRef<((quiz: QuizPayload) => void) | null>(null);
   const [code, setCode] = useState<string>('');
   const [roster, setRoster] = useState<readonly RosterEntry[]>([]);
   const [answered, setAnswered] = useState<{ answered: number; expected: number }>({
@@ -101,16 +108,33 @@ export function App(): JSX.Element {
         case 'room:finished':
           setStage({ k: 'finished' });
           return;
+        case 'room:error':
+          // Der Server hat die Sammlung abgelehnt. Zurueck zum Bildschirm,
+          // auf dem der Nutzer etwas daran aendern kann.
+          setServerfehler(message.message);
+          setStage({ k: 'upload' });
+          return;
         default:
           return;
       }
     });
     wireRef.current = wire;
-    createRoomOnce(wire.socket, () => wire.send({ t: 'host:create' }));
+    oeffne.current = createRoomOnce<QuizPayload>(
+      wire.socket,
+      (quiz) => wire.send({ t: 'host:create', quiz }),
+      () => setBereit(true),
+    );
     return () => {
       wire.dispose();
       wireRef.current = null;
+      oeffne.current = null;
     };
+  }, []);
+
+  const starte = useCallback((quiz: QuizPayload): void => {
+    setServerfehler(null);
+    setStage({ k: 'connecting' });
+    oeffne.current?.(quiz);
   }, []);
 
   // Die gemeinsame Uhr treibt jede Phase der Frage — nicht ein eintreffendes Ereignis.
@@ -127,6 +151,7 @@ export function App(): JSX.Element {
 
   const phase: Phase = useMemo(() => {
     switch (stage.k) {
+      case 'upload':
       case 'lobby':
         return 'LOBBY';
       case 'question':
@@ -145,6 +170,7 @@ export function App(): JSX.Element {
   const advance = useCallback(() => {
     const wire = wireRef.current;
     if (wire === null) return;
+    if (stage.k === 'upload') return;
     if (stage.k === 'lobby') {
       if (roster.length === 0) return;
       wire.send({ t: 'host:start', expectedPhase: 'LOBBY' });
@@ -157,10 +183,18 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        advance();
+      if (e.code !== 'Space') return;
+      // Im Fragenfeld ist die Leertaste ein Leerzeichen, kein Befehl.
+      const ziel = e.target;
+      if (
+        ziel instanceof HTMLTextAreaElement ||
+        ziel instanceof HTMLInputElement ||
+        (ziel instanceof HTMLElement && ziel.isContentEditable)
+      ) {
+        return;
       }
+      e.preventDefault();
+      advance();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -180,11 +214,19 @@ export function App(): JSX.Element {
         ) : null}
       </header>
 
-      <main className="mitte">{renderStage(stage, now, answered, roster, code)}</main>
+      <main className={stage.k === 'upload' ? 'mitte laden-mitte' : 'mitte'}>
+        {stage.k === 'upload' ? (
+          <Upload onStart={starte} bereit={bereit} serverfehler={serverfehler} />
+        ) : (
+          renderStage(stage, now, answered, roster, code)
+        )}
+      </main>
 
       <footer className="fuss">
         <span className="tastaturhinweis">
-          {stage.k === 'lobby'
+          {stage.k === 'upload'
+            ? 'Erst die Fragen, dann der Code'
+            : stage.k === 'lobby'
             ? 'Leertaste startet die Runde'
             : stage.k === 'question'
               ? 'Die Runde läuft'
@@ -196,6 +238,7 @@ export function App(): JSX.Element {
           onClick={advance}
           disabled={
             (stage.k === 'lobby' && roster.length === 0) ||
+            stage.k === 'upload' ||
             stage.k === 'question' ||
             stage.k === 'connecting' ||
             stage.k === 'finished'
@@ -210,6 +253,8 @@ export function App(): JSX.Element {
 
 function buttonLabel(stage: Stage, playerCount: number): string {
   switch (stage.k) {
+    case 'upload':
+      return 'Fragen prüfen';
     case 'connecting':
       return 'Verbinde …';
     case 'lobby':

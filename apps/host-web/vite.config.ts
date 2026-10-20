@@ -10,6 +10,9 @@ export default defineConfig({
       '@quizbude/protocol': fileURLToPath(
         new URL('../../packages/protocol/src/index.ts', import.meta.url),
       ),
+      '@quizbude/core': fileURLToPath(
+        new URL('../../packages/core/src/index.ts', import.meta.url),
+      ),
     },
   },
   server: {
