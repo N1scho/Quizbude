@@ -1,0 +1,2090 @@
+<title>Quizbude</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  color-scheme: dark;
+
+  /* Palette aus docs/konzept-ux.md, Abschnitt 4 und 7 */
+  --buehne:#121126;
+  --flaeche:#2B2752;
+  --linie:#413B73;
+  --papier:#F7F6FB;
+  --gedaempft:#A9A6C9;
+  --sonne:#FFC94D;
+  --welle:#36BFE0;
+  --glut:#B3350C;
+  --nacht:#2B2A8C;
+  --mint:#3DDC97;
+  --plum:#3B1033;
+  --schiefer:#3A3A4A;
+  --tinte:#121126;
+
+  --display:'Fredoka','Trebuchet MS','Segoe UI',system-ui,-apple-system,sans-serif;
+  --lauf:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+
+  --ein:cubic-bezier(0.2,0,0,1);
+  --aus:cubic-bezier(0.4,0,1,1);
+
+  --r-gross:22px;
+  --r-mittel:14px;
+  --r-klein:8px;
+}
+
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--buehne);
+  color:var(--papier);
+  font-family:var(--lauf);
+  font-size:17px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:14px;
+  display:flex;
+  flex-direction:column;
+  overflow-x:hidden;
+}
+
+h1,h2,h3,.gross,.zahl{font-family:var(--display);font-weight:600;margin:0;letter-spacing:-0.01em}
+.zahl{font-variant-numeric:tabular-nums}
+p{margin:0 0 .7em}
+:focus-visible{outline:3px solid var(--sonne);outline-offset:3px;border-radius:4px}
+
+#app{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;max-width:1500px;margin:0 auto}
+.screen{flex:1;min-height:0;display:flex;flex-direction:column}
+.scrollt{overflow-y:auto;overflow-x:hidden}
+
+/* ---------- Kopfzeile ---------- */
+#kopf{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+#wortmarke{font-family:var(--display);font-weight:700;font-size:26px;letter-spacing:-0.02em}
+#wortmarke span{color:var(--sonne)}
+#funkstand{
+  margin-left:auto;font-size:13px;color:var(--gedaempft);
+  border:1px solid var(--linie);border-radius:999px;padding:5px 13px;
+  display:inline-flex;align-items:center;gap:8px;background:var(--flaeche)
+}
+#funkstand::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--gedaempft);flex:none}
+#funkstand[data-stand="an"]::before{background:var(--mint)}
+#funkstand[data-stand="aus"]::before{background:var(--glut)}
+
+/* ---------- Flächen, Knöpfe ---------- */
+.karte{background:var(--flaeche);border:1px solid var(--linie);border-radius:var(--r-gross);padding:22px}
+.knopf{
+  font-family:var(--display);font-size:19px;font-weight:600;
+  background:var(--flaeche);color:var(--papier);
+  border:2px solid var(--linie);border-radius:var(--r-mittel);
+  padding:14px 22px;cursor:pointer;min-height:56px;
+  transition:transform 120ms var(--ein), background-color 120ms var(--ein), border-color 120ms var(--ein);
+}
+.knopf:hover{border-color:var(--gedaempft)}
+.knopf:active{transform:scale(.97)}
+.knopf[disabled]{opacity:.45;cursor:not-allowed}
+.knopf.haupt{background:var(--sonne);color:var(--tinte);border-color:var(--sonne)}
+.knopf.haupt:hover{background:#ffd978;border-color:#ffd978}
+.knopf.still{background:transparent;font-size:16px;min-height:44px;padding:10px 16px}
+
+label{display:block;font-size:14px;color:var(--gedaempft);margin-bottom:7px;letter-spacing:.02em;text-transform:uppercase}
+input[type=text],textarea{
+  width:100%;background:#1B1935;color:var(--papier);
+  border:2px solid var(--linie);border-radius:var(--r-mittel);
+  padding:13px 15px;font-family:var(--lauf);font-size:18px;
+}
+textarea{font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;font-size:15px;line-height:1.6;min-height:300px;resize:vertical}
+input[type=text]:focus,textarea:focus{border-color:var(--sonne);outline:none}
+
+.hinweis{color:var(--gedaempft);font-size:15px}
+.fehler{color:var(--sonne);font-size:16px}
+.fehler ul{margin:.3em 0;padding-left:1.1em}
+
+/* ---------- Startseite ---------- */
+#s-start{gap:22px}
+.aufmacher h1{font-size:clamp(34px,7vw,62px);line-height:1.05}
+.aufmacher p{max-width:46ch;color:var(--gedaempft);font-size:18px}
+.wahl{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.wahl button{text-align:left;display:flex;flex-direction:column;gap:6px;align-items:flex-start;height:100%}
+.wahl button small{font-family:var(--lauf);font-weight:400;font-size:14px;color:var(--gedaempft);text-transform:none;letter-spacing:0}
+.wahl button.haupt small{color:#4a3a12}
+#quizstand{font-size:15px;color:var(--gedaempft)}
+#quizstand b{color:var(--papier);font-weight:600}
+
+/* ---------- Bühne ---------- */
+#s-stage{gap:0}
+#buehnenkopf{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;margin-bottom:10px;flex:none}
+#b-zaehler{font-family:var(--display);font-size:clamp(18px,2.4vw,30px);color:var(--gedaempft)}
+#b-punktwert{font-family:var(--display);font-size:clamp(16px,2vw,24px);color:var(--sonne)}
+#b-phase{font-family:var(--display);font-size:clamp(16px,2vw,24px);color:var(--gedaempft);letter-spacing:.14em;text-transform:uppercase}
+#b-codeecke{margin-left:auto;font-family:var(--display);font-size:clamp(16px,2vw,26px);color:var(--gedaempft)}
+#b-codeecke b{color:var(--papier);letter-spacing:.14em}
+#buehnenknoepfe{display:flex;gap:10px;flex-wrap:wrap;flex:none;padding-top:14px}
+
+/* Lobby */
+#stage-lobby{flex:1;min-height:0;display:flex;flex-direction:column;gap:18px;overflow-y:auto}
+#codeblock{display:flex;gap:26px;align-items:center;flex-wrap:wrap}
+#codegross{
+  font-family:var(--display);font-weight:700;
+  font-size:clamp(64px,17vw,190px);line-height:.95;letter-spacing:.06em;
+  color:var(--sonne);
+}
+#codegross.gesperrt{text-decoration:line-through;color:var(--gedaempft)}
+#beitrittshinweis{font-size:clamp(15px,1.6vw,22px);color:var(--gedaempft);max-width:30ch}
+#beitrittshinweis b{color:var(--papier);word-break:break-all}
+#spielerfeld{display:flex;flex-wrap:wrap;gap:10px}
+.namenskachel{
+  font-family:var(--display);font-size:clamp(18px,2vw,30px);
+  background:var(--flaeche);border:2px solid var(--linie);border-radius:var(--r-mittel);
+  padding:8px 18px;animation:reinschieben 240ms var(--ein) both;
+}
+.namenskachel.weg{border-style:dashed;color:var(--gedaempft);background:transparent}
+@keyframes reinschieben{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+#spielerzahl{font-family:var(--display);font-size:clamp(20px,2.4vw,32px)}
+#spielerzahl b{color:var(--sonne)}
+
+/* Frage */
+#stage-frage{flex:1;min-height:0;display:flex;flex-direction:column;gap:14px}
+#b-frage{
+  font-family:var(--display);font-weight:500;
+  font-size:clamp(26px,4.2vw,62px);line-height:1.12;
+  flex:none;
+}
+#b-mitte{flex:1;min-height:0;display:flex;align-items:center;gap:clamp(12px,2vw,28px)}
+#b-timer{flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;width:clamp(86px,10vw,150px)}
+#b-timer svg{width:100%;height:auto;transform:rotate(-90deg)}
+#ring-spur{stroke:var(--linie)}
+#ring-lauf{stroke:var(--sonne);transition:stroke 240ms var(--ein)}
+#b-timer.knapp #ring-lauf{stroke:var(--glut)}
+#b-restzeit{font-family:var(--display);font-weight:700;font-size:clamp(26px,3.4vw,52px);font-variant-numeric:tabular-nums}
+#b-timerwort{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--gedaempft)}
+#b-zaehlstand{flex:none;text-align:center;width:clamp(86px,10vw,150px)}
+#b-antwortzahl{font-family:var(--display);font-weight:700;font-size:clamp(34px,5vw,86px);font-variant-numeric:tabular-nums;color:var(--sonne)}
+#b-zaehlwort{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--gedaempft)}
+#b-kacheln{flex:1;min-height:0;display:grid;gap:clamp(8px,1.2vw,16px)}
+#b-kacheln[data-anordnung="quad"]{grid-template-columns:1fr 1fr}
+#b-kacheln[data-anordnung="duo"]{grid-template-columns:1fr}
+#b-ausklang{flex:none;font-size:clamp(15px,1.8vw,26px);color:var(--gedaempft);min-height:1.5em}
+#b-ausklang b{color:var(--papier)}
+
+.kachel{
+  position:relative;display:flex;align-items:center;gap:clamp(8px,1.4vw,20px);
+  border:3px solid var(--papier);border-radius:var(--r-mittel);
+  padding:clamp(8px,1.2vw,18px);min-height:72px;
+  font-family:var(--display);font-weight:500;color:var(--tinte);
+  text-align:left;cursor:default;overflow:hidden;
+  transition:opacity 240ms var(--ein), transform 240ms var(--ein);
+}
+.kachel[data-farbe="sonne"]{background:var(--sonne);color:var(--tinte)}
+.kachel[data-farbe="welle"]{background:var(--welle);color:var(--tinte)}
+.kachel[data-farbe="glut"]{background:var(--glut);color:var(--papier)}
+.kachel[data-farbe="nacht"]{background:var(--nacht);color:var(--papier)}
+.kachel .form{width:clamp(28px,3.4vw,62px);height:clamp(28px,3.4vw,62px);flex:none;fill:currentColor}
+.kachel .text{font-size:clamp(17px,2.4vw,38px);line-height:1.15;flex:1;min-width:0;overflow-wrap:anywhere}
+.kachel .marke{font-size:clamp(22px,3vw,48px);font-weight:700;flex:none}
+.kachel .balken{position:absolute;left:0;bottom:0;height:7px;background:currentColor;opacity:.55;width:0;transition:width 600ms var(--ein)}
+.kachel[data-zustand="falsch"]{opacity:.45}
+.kachel[data-zustand="richtig"]{transform:scale(1.03)}
+.kachel.tippbar{cursor:pointer}
+.kachel.tippbar:active{transform:scale(.97)}
+.kachel[disabled]{opacity:1}
+.kachel[data-leer="ja"]{background:transparent;color:var(--gedaempft);border-style:dashed;border-color:var(--linie)}
+
+/* Zwischenstand */
+#stage-board{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;justify-content:center}
+.standzeile{
+  display:flex;align-items:center;gap:clamp(10px,1.6vw,22px);
+  background:var(--flaeche);border:1px solid var(--linie);border-radius:var(--r-mittel);
+  padding:clamp(8px,1.2vw,16px) clamp(12px,1.6vw,22px);
+  font-family:var(--display);font-size:clamp(20px,3vw,44px);
+  transition:transform 400ms var(--ein);
+}
+.standzeile .platz{color:var(--gedaempft);min-width:2.2ch}
+.standzeile .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.standzeile .punkte{font-variant-numeric:tabular-nums;font-weight:700}
+.standzeile .pfeil{font-size:.7em;min-width:3ch;text-align:right}
+.standzeile .pfeil[data-richtung="hoch"]{color:var(--sonne)}
+.standzeile .pfeil[data-richtung="runter"]{color:var(--gedaempft)}
+.standzeile[data-ich="ja"]{border-color:var(--sonne)}
+#board-rest{color:var(--gedaempft);font-family:var(--display);font-size:clamp(16px,2vw,28px)}
+
+/* Podium */
+#stage-podium{flex:1;min-height:0;display:flex;flex-direction:column;gap:16px;justify-content:center}
+#podeste{display:flex;align-items:flex-end;justify-content:center;gap:clamp(8px,1.6vw,26px);flex:none}
+.podest{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:8px;flex:1;max-width:320px}
+.podest .pname{font-family:var(--display);font-size:clamp(18px,2.6vw,40px);text-align:center;overflow-wrap:anywhere}
+.podest .ppunkte{font-family:var(--display);font-variant-numeric:tabular-nums;color:var(--gedaempft);font-size:clamp(14px,1.8vw,26px)}
+.podest .block{width:100%;border-radius:var(--r-mittel) var(--r-mittel) 0 0;display:flex;align-items:flex-start;justify-content:center;
+  font-family:var(--display);font-weight:700;font-size:clamp(26px,4vw,64px);color:var(--tinte);padding-top:10px}
+.podest[data-rang="1"] .block{background:var(--sonne);height:clamp(110px,22vh,230px)}
+.podest[data-rang="2"] .block{background:var(--welle);height:clamp(80px,16vh,170px)}
+.podest[data-rang="3"] .block{background:var(--gedaempft);height:clamp(60px,12vh,130px)}
+#podium-rest{text-align:center;color:var(--gedaempft);font-family:var(--display);font-size:clamp(15px,1.8vw,24px)}
+
+/* Weitergeben (ein Gerät, reihum) */
+#stage-pass{flex:1;min-height:0;display:flex;flex-direction:column;gap:18px;align-items:center;justify-content:center;text-align:center}
+#pass-name{font-family:var(--display);font-weight:700;font-size:clamp(34px,8vw,90px);color:var(--sonne);overflow-wrap:anywhere}
+
+/* ---------- Beitritt ---------- */
+#s-join{gap:18px;max-width:520px;width:100%;margin:0 auto}
+#codefeld{font-family:var(--display);font-size:38px;letter-spacing:.3em;text-align:center;text-transform:uppercase}
+#joinfehler{min-height:1.2em}
+
+/* ---------- Spielergerät ---------- */
+#s-play{gap:10px}
+#p-band{
+  flex:none;border-radius:var(--r-klein);padding:8px 12px;font-size:14px;
+  background:var(--flaeche);border:1px solid var(--linie);color:var(--gedaempft)
+}
+#p-zeitleiste{flex:none;height:8px;border-radius:999px;background:var(--flaeche);overflow:hidden}
+#p-zeitleiste i{display:block;height:100%;width:100%;background:var(--sonne);transition:background-color 240ms var(--ein)}
+#p-zeitleiste.knapp i{background:var(--glut)}
+#p-bereich{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+#p-kacheln{flex:1;min-height:0;display:grid;gap:12px}
+#p-kacheln[data-anordnung="quad"]{grid-template-columns:1fr 1fr}
+#p-kacheln[data-anordnung="duo"]{grid-template-columns:1fr}
+#p-kacheln .kachel{border-width:2px;justify-content:center;min-height:72px}
+#p-kacheln .kachel .form{width:clamp(38px,12vw,88px);height:clamp(38px,12vw,88px)}
+#p-kacheln[data-gesperrt="ja"] .kachel{opacity:.35;border-style:dashed}
+#p-kacheln[data-gesperrt="ja"] .kachel[data-farbe]{background:transparent}
+#p-kacheln[data-gesperrt="ja"] .kachel .form{fill:currentColor}
+#p-kacheln[data-gesperrt="ja"] .kachel[data-farbe="sonne"]{color:var(--sonne)}
+#p-kacheln[data-gesperrt="ja"] .kachel[data-farbe="welle"]{color:var(--welle)}
+#p-kacheln[data-gesperrt="ja"] .kachel[data-farbe="glut"]{color:#E86A3C}
+#p-kacheln[data-gesperrt="ja"] .kachel[data-farbe="nacht"]{color:#8C8AE0}
+.wackelt{animation:wackeln 120ms var(--ein) 2}
+@keyframes wackeln{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+
+#p-voll{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  border-radius:var(--r-gross);padding:22px;text-align:center}
+#p-voll[data-ton="warten"]{background:var(--flaeche);color:var(--papier)}
+#p-voll[data-ton="richtig"]{background:var(--mint);color:var(--tinte)}
+#p-voll[data-ton="falsch"]{background:var(--plum);color:var(--papier)}
+#p-voll[data-ton="neutral"]{background:var(--schiefer);color:var(--papier)}
+#p-voll[data-ton="sonne"]{background:var(--sonne);color:var(--tinte)}
+#p-voll[data-ton="welle"]{background:var(--welle);color:var(--tinte)}
+#p-voll[data-ton="glut"]{background:var(--glut);color:var(--papier)}
+#p-voll[data-ton="nacht"]{background:var(--nacht);color:var(--papier)}
+#p-glyph{width:clamp(70px,26vw,150px);height:clamp(70px,26vw,150px);fill:currentColor}
+#p-wort{font-family:var(--display);font-weight:700;font-size:clamp(30px,10vw,54px)}
+#p-punkte{font-family:var(--display);font-weight:700;font-size:clamp(38px,15vw,76px);font-variant-numeric:tabular-nums}
+#p-unterzeile{font-size:clamp(15px,4vw,20px);opacity:.85}
+#p-fuss{flex:none;display:flex;justify-content:space-between;gap:12px;font-size:15px;color:var(--gedaempft)}
+#p-fuss b{color:var(--papier)}
+#p-punktestand{font-variant-numeric:tabular-nums}
+
+@media (max-width:700px){
+  body{font-size:16px}
+  #b-kacheln{grid-template-columns:1fr}
+  #codeblock{gap:14px}
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:1ms !important;animation-iteration-count:1 !important;transition-duration:1ms !important}
+}
+</style>
+
+<svg hidden aria-hidden="true">
+  <defs>
+    <symbol id="f-blitz" viewBox="0 0 100 100"><path d="M60 4 L20 54 h24 l-8 42 L80 46 H54 z"/></symbol>
+    <symbol id="f-tropfen" viewBox="0 0 100 100"><path d="M50 4 C50 4 16 46 16 64 a34 34 0 0 0 68 0 C84 46 50 4 50 4 z"/></symbol>
+    <symbol id="f-herz" viewBox="0 0 100 100"><path d="M50 93 C6 65 4 34 23 22 C37 13 47 21 50 31 C53 21 63 13 77 22 C96 34 94 65 50 93 z"/></symbol>
+    <symbol id="f-mond" viewBox="0 0 100 100"><path d="M66 8 A44 44 0 1 0 66 92 A46 46 0 1 1 66 8 z"/></symbol>
+    <symbol id="f-haken" viewBox="0 0 100 100"><path d="M12 52 L38 78 L88 20 L76 10 L37 56 L23 41 z"/></symbol>
+    <symbol id="f-kreuz" viewBox="0 0 100 100"><path d="M20 12 L50 42 L80 12 L88 20 L58 50 L88 80 L80 88 L50 58 L20 88 L12 80 L42 50 L12 20 z"/></symbol>
+  </defs>
+</svg>
+
+<main id="app">
+
+  <header id="kopf">
+    <div id="wortmarke">Quiz<span>bude</span></div>
+    <div id="funkstand" data-stand="pruef">Funk wird geprüft</div>
+  </header>
+
+  <!-- ====================== Start ====================== -->
+  <section id="s-start" class="screen scrollt">
+    <div class="aufmacher">
+      <h1>Ein Quiz für den<br>Abend am Tisch.</h1>
+      <p>Der große Bildschirm stellt die Frage. Die Telefone antworten. Wer zuerst
+         richtig tippt, bekommt die meisten Punkte. Zehn Sekunden Lesezeit gibt es immer.</p>
+    </div>
+
+    <div class="wahl">
+      <button class="knopf haupt" id="btn-buehne" type="button">Bühne eröffnen
+        <small>Großer Bildschirm. Du bekommst einen Code, die anderen tippen ihn ein.</small></button>
+      <button class="knopf" id="btn-mitspielen" type="button">Mitspielen
+        <small>Code eintippen, Name eingeben, Daumen bereithalten.</small></button>
+      <button class="knopf" id="btn-allein" type="button">Allein am Bildschirm
+        <small>Ein Gerät, reihum am Tisch. Funktioniert ohne Netz.</small></button>
+    </div>
+
+    <div class="karte">
+      <h2 style="font-size:22px;margin-bottom:8px">Fragen</h2>
+      <p id="quizstand" class="hinweis">Geladen: <b>—</b></p>
+      <button class="knopf still" id="btn-editor" type="button">Eigene Fragen schreiben</button>
+    </div>
+
+    <p class="hinweis" id="startfuss">Nichts wird gespeichert, nichts verschickt. Schließt die Seite, ist die Runde vorbei.</p>
+  </section>
+
+  <!-- ====================== Fragen-Editor ====================== -->
+  <section id="s-editor" class="screen scrollt" hidden>
+    <h1 style="font-size:30px;margin-bottom:6px">Eigene Fragen</h1>
+    <p class="hinweis" style="max-width:62ch">
+      Eine Frage je Block, Blöcke durch eine Leerzeile getrennt. Erste Zeile ist die Frage,
+      darunter zwei bis vier Antworten. Ein <b>*</b> markiert die richtige. <b>| 20</b> hinter der
+      Frage setzt die Antwortzeit in Sekunden, <b>&gt;</b> eine Erklärung.
+      Heißen die beiden Antworten <b>Wahr</b> und <b>Falsch</b>, wird daraus eine Wahr/Falsch-Frage.
+    </p>
+    <label for="editorfeld">Fragen</label>
+    <textarea id="editorfeld" spellcheck="false" autocomplete="off"></textarea>
+    <div id="editormeldung" class="fehler" style="margin-top:12px"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+      <button class="knopf haupt" id="btn-editor-uebernehmen" type="button">Übernehmen</button>
+      <button class="knopf still" id="btn-editor-demo" type="button">Demorunde zurückholen</button>
+      <button class="knopf still" id="btn-editor-zurueck" type="button">Zurück</button>
+    </div>
+  </section>
+
+  <!-- ====================== Beitritt ====================== -->
+  <section id="s-join" class="screen scrollt" hidden>
+    <h1 style="font-size:30px">Mitspielen</h1>
+    <div>
+      <label for="codefeld">Spielcode</label>
+      <input type="text" id="codefeld" maxlength="7" autocomplete="off" autocapitalize="characters"
+             spellcheck="false" placeholder="ABCD">
+    </div>
+    <div>
+      <label for="namefeld">Dein Name (höchstens 16 Zeichen)</label>
+      <input type="text" id="namefeld" maxlength="16" autocomplete="off" spellcheck="false" placeholder="Mira">
+    </div>
+    <div id="joinfehler" class="fehler"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="knopf haupt" id="btn-join" type="button">Mitspielen</button>
+      <button class="knopf still" id="btn-join-zurueck" type="button">Zurück</button>
+    </div>
+    <p class="hinweis" id="joinhinweis">Den Code sagt dir der große Bildschirm.</p>
+  </section>
+
+  <!-- ====================== Bühne (auch: allein am Bildschirm) ====================== -->
+  <section id="s-stage" class="screen" hidden>
+
+    <div id="buehnenkopf">
+      <div id="b-zaehler"></div>
+      <div id="b-punktwert" hidden></div>
+      <div id="b-phase"></div>
+      <div id="b-codeecke" hidden>Code <b></b></div>
+    </div>
+
+    <!-- Lobby -->
+    <div id="stage-lobby">
+      <div id="codeblock">
+        <div id="codegross">————</div>
+        <div id="beitrittshinweis"></div>
+      </div>
+      <div id="soloaufnahme" hidden>
+        <label for="solonamefeld">Wer spielt mit?</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <input type="text" id="solonamefeld" maxlength="16" placeholder="Name" style="max-width:260px">
+          <button class="knopf" id="btn-solo-add" type="button">Dazu</button>
+        </div>
+      </div>
+      <div id="spielerzahl"></div>
+      <div id="spielerfeld"></div>
+      <div id="lobbyhinweis" class="hinweis"></div>
+    </div>
+
+    <!-- Frage und Auflösung -->
+    <div id="stage-frage" hidden>
+      <div id="b-frage"></div>
+      <div id="b-mitte">
+        <div id="b-timer">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle id="ring-spur" cx="60" cy="60" r="52" fill="none" stroke-width="12"></circle>
+            <circle id="ring-lauf" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke-linecap="round"></circle>
+          </svg>
+          <div id="b-restzeit">0</div>
+          <div id="b-timerwort">Sekunden</div>
+        </div>
+        <div id="b-kacheln" data-anordnung="quad"></div>
+        <div id="b-zaehlstand">
+          <div id="b-antwortzahl">0</div>
+          <div id="b-zaehlwort">dabei</div>
+        </div>
+      </div>
+      <div id="b-ausklang"></div>
+    </div>
+
+    <!-- Weitergeben -->
+    <div id="stage-pass" hidden>
+      <div class="hinweis">Gerät weitergeben an</div>
+      <div id="pass-name"></div>
+      <button class="knopf haupt" id="btn-pass" type="button">Bin bereit</button>
+    </div>
+
+    <!-- Zwischenstand -->
+    <div id="stage-board" hidden>
+      <h2 id="board-titel" style="font-size:clamp(22px,3vw,40px)">Zwischenstand</h2>
+      <div id="board-zeilen"></div>
+      <div id="board-rest"></div>
+    </div>
+
+    <!-- Podium -->
+    <div id="stage-podium" hidden>
+      <h2 style="font-size:clamp(24px,3.4vw,46px);text-align:center">Und das war der Abend</h2>
+      <div id="podeste"></div>
+      <div id="podium-rest"></div>
+    </div>
+
+    <div id="buehnenknoepfe">
+      <button class="knopf haupt" id="btn-weiter" type="button">Weiter</button>
+      <button class="knopf still" id="btn-ton" type="button" aria-pressed="true">Ton an</button>
+      <button class="knopf still" id="btn-sperren" type="button" aria-pressed="false">Beitritt sperren</button>
+      <button class="knopf still" id="btn-stage-ende" type="button">Runde beenden</button>
+    </div>
+  </section>
+
+  <!-- ====================== Spielergerät ====================== -->
+  <section id="s-play" class="screen" hidden>
+    <div id="p-band" role="status" aria-live="polite" hidden></div>
+    <div id="p-zeitleiste" hidden><i></i></div>
+    <div id="p-bereich">
+      <div id="p-kacheln" data-anordnung="quad" hidden></div>
+      <div id="p-voll" data-ton="warten">
+        <svg id="p-glyph" aria-hidden="true" hidden><use href="#f-haken"></use></svg>
+        <div id="p-wort" aria-live="polite"></div>
+        <div id="p-punkte" hidden></div>
+        <div id="p-unterzeile"></div>
+        <button class="knopf" id="btn-play-zurueck" type="button" hidden>Zurück zum Anfang</button>
+      </div>
+    </div>
+    <div id="p-fuss">
+      <div id="p-eigenname"></div>
+      <div id="p-punktestand"></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/* =========================================================================
+   Quizbude — eine Datei, drei Rollen.
+   Spiellogik portiert aus packages/core (engine/, scoring/, questions/,
+   ranking.ts, rng.ts). Zahlen und Formeln sind von dort übernommen.
+   ========================================================================= */
+
+/* ---------- Konstanten (engine/constants.ts) ---------- */
+const ANNOUNCE_MS = 3000;
+const LATE_GRACE_MS = 1500;
+const ALL_ANSWERED_SETTLE_MS = 300;
+const PLAYER_SOFT_WARN = 25;
+
+const READING_BASE_MS = 1500;
+const READING_PER_PROMPT_WORD_MS = 400;
+const READING_PER_OPTION_WORD_MS = 150;
+const READING_MIN_MS = 10000;          /* keine Obergrenze */
+
+const MAX_PROMPT_CHARS = 200;
+const MAX_OPTION_CHARS = 100;
+const MAX_NAME_CHARS = 16;
+
+/* ---------- Konstanten (scoring/constants.ts) ---------- */
+const FULL_POINTS_THRESHOLD_MS = 500;
+const MIN_TIME_FACTOR = 0.5;           /* per Konstruktion garantiert, wie im Kern */
+const POINT_UNIT_VALUE = 1000;
+const COMPENSATION_CAP_MS = 400;
+
+/* ---------- Grenzen dieser Fassung ---------- */
+const ROOM_PLAYER_CAP = 40;            /* Abweichung: 4-KiB-Grenze je Funkspruch */
+const STATE_BYTE_BUDGET = 3600;
+const BROADCAST_MS = 1000;
+const TICK_MS = 90;
+const JOIN_WIEDERHOLUNG_MS = 1500;
+const JOIN_FRIST_MS = 7000;
+const BUEHNE_STILL_MS = 8000;
+const STAGE_PIN_FREI_MS = 6000;
+
+const CODE_ALPHABET = 'ACDEFGHJKMNPQRTUVWXY234679';
+const FARBEN = ['sonne','welle','glut','nacht'];
+const FORMEN = ['f-blitz','f-tropfen','f-herz','f-mond'];
+
+/* =========================================================================
+   Reine Funktionen
+   ========================================================================= */
+
+function countWords(text){
+  const t = String(text).trim();
+  if (t.length === 0) return 0;
+  return t.split(/\s+/u).length;
+}
+
+/* reading.ts — 1,5 s + 0,40 s je Fragewort + 0,15 s je Antwortwort, Minimum 10 s */
+function readingWindowMs(prompt, optionLabels){
+  const promptWords = countWords(prompt);
+  let optionWords = 0;
+  for (const label of optionLabels) optionWords += countWords(label);
+  const raw = READING_BASE_MS
+    + READING_PER_PROMPT_WORD_MS * promptWords
+    + READING_PER_OPTION_WORD_MS * optionWords;
+  return Math.max(Math.round(raw), READING_MIN_MS);
+}
+
+/* scoring/score.ts */
+function maxPointsOf(units, unitValue, pointsFactor){
+  return Math.round(unitValue * units * pointsFactor);
+}
+function compensate(rawElapsedMs, rttMinMs){
+  const halfRtt = rttMinMs !== null && rttMinMs !== undefined ? rttMinMs / 2 : 0;
+  return Math.max(0, rawElapsedMs - Math.min(halfRtt, COMPENSATION_CAP_MS));
+}
+function scoreAnswer(i){
+  if (!i.correct) return 0;
+  if (i.late) return 0;
+  const max = maxPointsOf(i.units, i.unitValue, i.pointsFactor);
+  if (max === 0) return 0;
+  if (i.scoringMode === 'flat') return max;
+  if (i.timeLimitMs <= 0) return max;
+  if (i.elapsedMs < FULL_POINTS_THRESHOLD_MS) return max;
+  const t = Math.min(Math.max(i.elapsedMs, 0), i.timeLimitMs);
+  const factor = 1 - t / i.timeLimitMs / 2;
+  return Math.round(factor * max);
+}
+
+/* ranking.ts */
+function rank(players){
+  const sorted = players.slice().sort((a,b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.displayName.localeCompare(b.displayName, 'de');
+  });
+  const out = [];
+  let currentRank = 0;
+  let previousScore = null;
+  for (let i = 0; i < sorted.length; i += 1){
+    const p = sorted[i];
+    if (previousScore === null || p.score !== previousScore){
+      currentRank = i + 1;
+      previousScore = p.score;
+    }
+    const deltaToAhead = currentRank === 1 ? 0 : out[currentRank - 2].score - p.score;
+    out.push({ playerId: p.id, displayName: p.displayName, score: p.score, rank: currentRank, deltaToAhead });
+  }
+  return out;
+}
+
+/* rng.ts */
+function createRng(seed){
+  let a = seed >>> 0;
+  return { next(){
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }};
+}
+function shuffledIndices(n, rng){
+  const out = [];
+  for (let i = 0; i < n; i += 1) out.push(i);
+  for (let i = n - 1; i > 0; i -= 1){
+    const j = Math.floor(rng.next() * (i + 1));
+    const a = out[i]; out[i] = out[j]; out[j] = a;
+  }
+  return out;
+}
+function identityIndices(n){
+  const out = [];
+  for (let i = 0; i < n; i += 1) out.push(i);
+  return out;
+}
+
+/* step.ts — Namensprüfung */
+function normalizeName(raw){
+  const collapsed = String(raw).normalize('NFKC').replace(/\s+/gu, ' ').trim();
+  if (collapsed.length < 1 || collapsed.length > MAX_NAME_CHARS) return null;
+  if (!/^[\p{L}\p{N} _.-]+$/u.test(collapsed)) return null;
+  return collapsed;
+}
+function nameKey(normalized){ return normalized.toLocaleLowerCase('de'); }
+
+/* Spielcode: vier eindeutige Zeichen, kein 0/O, kein 1/I/L */
+function makeCode(zufall){
+  const r = zufall || (() => Math.random());
+  let out = '';
+  for (let i = 0; i < 4; i += 1){
+    out += CODE_ALPHABET.charAt(Math.floor(r() * CODE_ALPHABET.length) % CODE_ALPHABET.length);
+  }
+  return out;
+}
+function cleanCode(raw){
+  const gross = String(raw).toUpperCase().replace(/[\s-]+/g, '');
+  let code = '';
+  let verworfen = 0;
+  for (const ch of gross){
+    if (CODE_ALPHABET.indexOf(ch) >= 0) code += ch; else verworfen += 1;
+  }
+  return { code: code.slice(0, 4), verworfen };
+}
+function roomName(code){ return 'q-' + code.toLowerCase(); }
+
+/* Kachelzuordnung: Farbe und Form hängen allein an der Anzeigeposition */
+function tileColorIndex(display, anzahl){
+  if (anzahl === 2) return display === 0 ? 0 : 3;   /* Sonne oben, Nacht unten */
+  return display;
+}
+
+/* =========================================================================
+   Fragen: Parser für das Zeilenformat
+   ========================================================================= */
+
+const DEMO_TEXT =
+'# Quizbude — Demorunde\n' +
+'\n' +
+'Welcher Planet ist der Sonne am nächsten? | 20\n' +
+'* Merkur\n' +
+'Venus\n' +
+'Mars\n' +
+'Jupiter\n' +
+'> Merkur umkreist die Sonne im Mittel in 58 Millionen Kilometern Abstand.\n' +
+'\n' +
+'Ein Oktopus hat drei Herzen. | 15\n' +
+'* Wahr\n' +
+'Falsch\n' +
+'> Zwei Kiemenherzen pumpen durch die Kiemen, ein Körperherz durch den Rest.\n';
+
+function parseQuiz(text){
+  const zeilen = String(text).replace(/\r/g, '').split('\n');
+  const fehler = [];
+  const bloecke = [];
+  let titel = 'Quizbude';
+  let aktuell = null;
+  let titelErlaubt = true;
+
+  const schliessen = () => { if (aktuell) bloecke.push(aktuell); aktuell = null; };
+
+  for (let i = 0; i < zeilen.length; i += 1){
+    const roh = zeilen[i];
+    const zeile = roh.trim();
+    const nr = i + 1;
+    if (zeile === ''){ schliessen(); continue; }
+
+    if (titelErlaubt && zeile.startsWith('#')){
+      const t = zeile.replace(/^#+\s*/, '').trim();
+      if (t) titel = t;
+      titelErlaubt = false;
+      continue;
+    }
+
+    if (aktuell === null){
+      titelErlaubt = false;
+      let prompt = zeile;
+      let sekunden = 20;
+      const m = prompt.match(/\s*\|\s*(\d{1,3})\s*$/);
+      if (m){
+        sekunden = parseInt(m[1], 10);
+        prompt = prompt.slice(0, m.index).trim();
+      }
+      aktuell = { zeile: nr, prompt, sekunden, antworten: [], richtig: [], erklaerung: null };
+      continue;
+    }
+
+    if (zeile.startsWith('>')){
+      const e = zeile.slice(1).trim();
+      aktuell.erklaerung = aktuell.erklaerung ? aktuell.erklaerung + ' ' + e : e;
+      continue;
+    }
+
+    let istRichtig = false;
+    let label = zeile;
+    if (/^[*+]/.test(label)){ istRichtig = true; label = label.slice(1).trim(); }
+    else if (/^-\s/.test(label)){ label = label.slice(1).trim(); }
+    if (istRichtig) aktuell.richtig.push(aktuell.antworten.length);
+    aktuell.antworten.push({ label, zeile: nr });
+  }
+  schliessen();
+
+  if (bloecke.length === 0){
+    fehler.push('Da steht noch keine Frage. Schreib eine Frage, darunter die Antworten.');
+    return { ok:false, fehler, titel, questions: [] };
+  }
+
+  const questions = [];
+  bloecke.forEach((b, idx) => {
+    const nr = idx + 1;
+    const wo = 'Frage ' + nr + ' (Zeile ' + b.zeile + ')';
+
+    if (b.prompt.length === 0) fehler.push(wo + ': Der Fragetext fehlt.');
+    if (b.prompt.length > MAX_PROMPT_CHARS){
+      fehler.push(wo + ': ' + b.prompt.length + ' Zeichen. ' + MAX_PROMPT_CHARS +
+        ' sind das Maximum — kürz sie um ' + (b.prompt.length - MAX_PROMPT_CHARS) + '.');
+    }
+    if (b.sekunden < 5 || b.sekunden > 300){
+      fehler.push(wo + ': Die Antwortzeit muss zwischen 5 und 300 Sekunden liegen.');
+    }
+    if (b.antworten.length < 2){
+      fehler.push(wo + ': Mindestens zwei Antworten. Eine Frage mit einer Antwort ist keine Frage.');
+    }
+    if (b.antworten.length > 4){
+      fehler.push(wo + ': ' + b.antworten.length + ' Antworten. Vier sind das Maximum — ' +
+        'fehlt zwischen zwei Fragen vielleicht eine Leerzeile?');
+    }
+    b.antworten.forEach((a, ai) => {
+      if (a.label.length === 0) fehler.push(wo + ': Antwort ' + (ai + 1) + ' ist leer.');
+      if (a.label.length > MAX_OPTION_CHARS){
+        fehler.push(wo + ': Antwort ' + (ai + 1) + ' hat ' + a.label.length + ' Zeichen, erlaubt sind ' + MAX_OPTION_CHARS + '.');
+      }
+    });
+    if (b.richtig.length === 0){
+      fehler.push(wo + ': Keine Antwort ist markiert. Setz ein * vor die richtige.');
+    } else if (b.richtig.length > 1){
+      fehler.push(wo + ': ' + b.richtig.length + ' Antworten sind markiert. Genau eine darf es sein.');
+    }
+
+    const labels = b.antworten.map(a => a.label);
+    const istWahrFalsch = labels.length === 2
+      && labels[0].toLocaleLowerCase('de') === 'wahr'
+      && labels[1].toLocaleLowerCase('de') === 'falsch';
+
+    questions.push({
+      id: 'q' + nr,
+      type: istWahrFalsch ? 'true_false' : 'single_choice',
+      prompt: b.prompt,
+      timeLimitMs: b.sekunden * 1000,
+      pointsFactor: 1,
+      spec: istWahrFalsch
+        ? { correct: b.richtig[0] === 0, explanation: b.erklaerung }
+        : { options: labels.map(l => ({ label: l })), correctIndex: b.richtig.length === 1 ? b.richtig[0] : 0, explanation: b.erklaerung }
+    });
+  });
+
+  return { ok: fehler.length === 0, fehler, titel, questions };
+}
+
+/* Typabhängiges — aus questions/singleChoice.ts und questions/trueFalse.ts */
+function optionLabelsOf(q){
+  if (q.type === 'true_false') return ['Wahr','Falsch'];
+  return q.spec.options.map(o => o.label);
+}
+function buildPublicView(q, rng, shuffle){
+  if (q.type === 'true_false'){
+    return { options: [{index:0,label:'Wahr'},{index:1,label:'Falsch'}], mapping: [0,1], layout: 'duo' };
+  }
+  const n = q.spec.options.length;
+  const mapping = shuffle ? shuffledIndices(n, rng) : identityIndices(n);
+  const options = mapping.map((canonical, display) => ({ index: display, label: q.spec.options[canonical].label }));
+  return { options, mapping, layout: n <= 2 ? 'duo' : 'quad' };
+}
+function canonicalOf(q, displayIndex, mapping){
+  if (q.type === 'true_false') return displayIndex;
+  return mapping[displayIndex];
+}
+function gradeCanonical(q, canonical){
+  if (q.type === 'true_false') return (canonical === 0) === q.spec.correct;
+  return canonical === q.spec.correctIndex;
+}
+function correctDisplayIndices(q, mapping){
+  if (q.type === 'true_false') return [q.spec.correct ? 0 : 1];
+  const out = [];
+  mapping.forEach((canonical, display) => { if (canonical === q.spec.correctIndex) out.push(display); });
+  return out;
+}
+function explanationOf(q){ return q.spec.explanation || null; }
+
+/* =========================================================================
+   Zustand dieser Seite
+   ========================================================================= */
+
+let rolle = 'start';           /* start | editor | join | stage | solo | play */
+let quiz = parseQuiz(DEMO_TEXT);
+let game = null;               /* Zustandsmaschine, nur auf Bühne und solo */
+let takt = null;               /* der eine Zeitgeber der aktiven Rolle */
+
+let roomApi = null;            /* Claude.room oder null */
+let roomBereit = false;        /* use() hat geantwortet */
+let raum = null;               /* NamedRoom */
+let abmelder = [];
+
+/* Spielergerät */
+let ich = {
+  peer: null, name: '', code: '', stagePeer: null,
+  letzterState: null, letzterStateAt: 0, versatz: 0,
+  bestaetigt: false, abgegeben: null, joinSeit: 0, joinTimer: null, fehlerGezeigt: false
+};
+
+/* Bühne */
+let tonAn = true;
+let audio = null;
+let schnappschuss = null;      /* window.claude.hot, falls der Betrachter ihn hat */
+let letzteSendung = 0;
+let schmutzig = false;
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------- Töne (nur Bühne, erst nach einer Geste) ---------- */
+function tonWecken(){
+  if (audio || !tonAn) return;
+  try {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return;
+    audio = new C();
+  } catch (e) { audio = null; }
+}
+function ton(freq, dauer, art, laut){
+  if (!tonAn || !audio) return;
+  try {
+    if (audio.state === 'suspended') audio.resume();
+    const o = audio.createOscillator();
+    const g = audio.createGain();
+    o.type = art || 'sine';
+    o.frequency.value = freq;
+    const jetzt = audio.currentTime;
+    g.gain.setValueAtTime(0.0001, jetzt);
+    g.gain.exponentialRampToValueAtTime(laut || 0.18, jetzt + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, jetzt + dauer);
+    o.connect(g); g.connect(audio.destination);
+    o.start(jetzt); o.stop(jetzt + dauer + 0.02);
+  } catch (e) { /* Ton ist Zugabe, nie Träger */ }
+}
+const tonTick    = () => ton(880, 0.07, 'square', 0.08);
+const tonFrei    = () => { ton(660, 0.12, 'triangle', 0.16); setTimeout(() => ton(990, 0.16, 'triangle', 0.16), 110); };
+const tonSchluss = () => ton(220, 0.4, 'sawtooth', 0.12);
+const tonReveal  = () => { ton(520, 0.18, 'sine', 0.18); setTimeout(() => ton(780, 0.3, 'sine', 0.16), 150); };
+
+/* ---------- Merkzettel (nur Bequemlichkeit) ---------- */
+function merke(schluessel, wert){
+  try { window.localStorage.setItem('quizbude.' + schluessel, wert); } catch (e) { /* egal */ }
+}
+function erinnere(schluessel){
+  try { return window.localStorage.getItem('quizbude.' + schluessel) || ''; } catch (e) { return ''; }
+}
+
+/* =========================================================================
+   Zustandsmaschine (engine/step.ts, portiert)
+   ========================================================================= */
+
+function createGame(opts){
+  return {
+    modus: opts.modus,                 /* 'room' | 'solo' */
+    code: opts.code,
+    title: quiz.titel,
+    questions: quiz.questions,
+    scoringMode: 'timed',
+    shuffleOptions: true,
+    phase: 'LOBBY',
+    locked: false,
+    players: [],
+    seed: (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0,
+    startedAt: null,
+    q: null,
+    preparedAt: 0, announceUntil: 0, answersOpenAt: 0,
+    openedAt: 0, closeAt: 0, settleAt: null,
+    turn: null,                        /* null = alle; sonst playerId */
+    queue: [],
+    answers: {},
+    closedAt: 0, lateUntil: 0,
+    counts: [], correctCount: 0,
+    ranking: [], afterSeq: -1,
+    endReason: null,
+    rejects: []
+  };
+}
+
+function spieler(id){ return game.players.find(p => p.id === id) || null; }
+function connectedCount(){ return game.players.filter(p => p.connected).length; }
+function rankable(){ return game.players.map(p => ({ id: p.id, displayName: p.name, score: p.score })); }
+
+function addPlayer(id, rohName, at){
+  if (game.phase === 'PODIUM' || game.phase === 'FINISHED') return { ok:false, reason:'finished' };
+  if (game.phase === 'LOBBY' && game.locked) return { ok:false, reason:'locked' };
+  if (game.players.length >= ROOM_PLAYER_CAP) return { ok:false, reason:'capacity' };
+
+  const name = normalizeName(rohName);
+  if (name === null) return { ok:false, reason:'name_invalid' };
+  const key = nameKey(name);
+
+  const vorhanden = game.players.find(p => nameKey(p.name) === key);
+  if (vorhanden){
+    if (vorhanden.id === id){ vorhanden.connected = true; return { ok:true, player: vorhanden }; }
+    if (!vorhanden.connected){
+      /* Wiederkehr nach Neuladen: der Platz samt Punkten wandert auf das neue Gerät. */
+      vorhanden.id = id; vorhanden.connected = true;
+      return { ok:true, player: vorhanden, uebernommen:true };
+    }
+    return { ok:false, reason:'name_taken' };
+  }
+
+  const p = { id, name, score:0, correctCount:0, answeredCount:0, connected:true, joinedAt:at, letzterRang:0 };
+  game.players.push(p);
+  return { ok:true, player:p };
+}
+
+function prepareQuestion(seq, at){
+  const q = game.questions[seq];
+  if (!q) return;
+  const rng = createRng((game.seed + seq * 2654435761) >>> 0);
+  const pv = buildPublicView(q, rng, game.shuffleOptions);
+  const units = 1;
+  const maxPoints = maxPointsOf(units, POINT_UNIT_VALUE, q.pointsFactor);
+  const reading = readingWindowMs(q.prompt, pv.options.map(o => o.label));
+
+  game.phase = 'PREVIEW';
+  game.startedAt = game.startedAt === null ? at : game.startedAt;
+  game.q = {
+    seq, total: game.questions.length, type: q.type, prompt: q.prompt,
+    timeLimitMs: q.timeLimitMs, pointsFactor: q.pointsFactor,
+    units, maxPoints, options: pv.options, mapping: pv.mapping,
+    layout: pv.layout, readingWindowMs: reading
+  };
+  game.preparedAt = at;
+  game.announceUntil = at + ANNOUNCE_MS;
+  game.answersOpenAt = game.announceUntil + reading;
+  game.answers = {};
+  game.counts = [];
+  game.correctCount = 0;
+  game.settleAt = null;
+  game.queue = game.modus === 'solo' ? game.players.map(p => p.id) : [];
+  game.turn = null;
+  markDirty();
+}
+
+function openAnswers(){
+  const at = game.answersOpenAt;
+  game.phase = 'OPEN';
+  if (game.modus === 'solo'){
+    game.turn = game.queue.shift() || null;
+  } else {
+    game.turn = null;
+  }
+  game.openedAt = at;
+  game.closeAt = at + game.q.timeLimitMs;
+  game.settleAt = null;
+  tonFrei();
+  markDirty();
+}
+
+function openNextTurn(at){
+  game.phase = 'OPEN';
+  game.turn = game.queue.shift() || null;
+  game.openedAt = at;
+  game.closeAt = at + game.q.timeLimitMs;
+  game.settleAt = null;
+  markDirty();
+}
+
+/* Eine Antwort annehmen. displayIndex ist die Kachelposition. */
+function submitAnswer(playerId, displayIndex, at, rttMinMs){
+  if (!game.q) return { ok:false, reason:'wrong_phase' };
+  const p = spieler(playerId);
+  if (!p) return { ok:false, reason:'unknown_player' };
+  if (game.answers[playerId]) return { ok:true, record: game.answers[playerId], doppelt:true };
+
+  const anzahl = game.q.options.length;
+  if (!Number.isInteger(displayIndex) || displayIndex < 0 || displayIndex >= anzahl){
+    return { ok:false, reason:'out_of_range' };
+  }
+
+  let late;
+  if (game.phase === 'OPEN'){
+    if (game.turn !== null && game.turn !== playerId) return { ok:false, reason:'wrong_phase' };
+    late = false;
+  } else if (game.phase === 'REVEAL'){
+    if (at > game.lateUntil) return { ok:false, reason:'closed' };
+    late = true;
+  } else if (game.phase === 'PREVIEW'){
+    return { ok:false, reason:'not_open' };
+  } else {
+    return { ok:false, reason:'wrong_phase' };
+  }
+
+  const canonical = canonicalOf(game.questions[game.q.seq], displayIndex, game.q.mapping);
+  const correct = gradeCanonical(game.questions[game.q.seq], canonical);
+  const rawElapsedMs = at - game.openedAt;
+  const scoredElapsedMs = compensate(rawElapsedMs, rttMinMs === undefined ? null : rttMinMs);
+  const points = scoreAnswer({
+    correct, late, scoringMode: game.scoringMode,
+    elapsedMs: scoredElapsedMs, timeLimitMs: game.q.timeLimitMs,
+    units: game.q.units, unitValue: POINT_UNIT_VALUE, pointsFactor: game.q.pointsFactor
+  });
+
+  const record = { playerId, displayIndex, canonical, receivedAt: at, rawElapsedMs, scoredElapsedMs, correct, late, points };
+  game.answers[playerId] = record;
+
+  if (late){
+    p.answeredCount += 1;
+    if (correct) p.correctCount += 1;
+  }
+  maybeSettle(at);
+  markDirty();
+  return { ok:true, record };
+}
+
+function maybeSettle(at){
+  if (game.phase !== 'OPEN') return;
+  if (game.settleAt !== null) return;
+  let erwartet;
+  let gezaehlt;
+  if (game.turn !== null){
+    erwartet = 1;
+    gezaehlt = game.answers[game.turn] ? 1 : 0;
+  } else {
+    erwartet = connectedCount();
+    gezaehlt = Object.keys(game.answers).length;
+  }
+  if (erwartet === 0 || gezaehlt < erwartet) return;
+  const settleAt = at + ALL_ANSWERED_SETTLE_MS;
+  if (settleAt >= game.closeAt) return;
+  game.settleAt = settleAt;
+}
+
+function closeAndReveal(closedAt){
+  const q = game.questions[game.q.seq];
+  const counts = new Array(game.q.options.length).fill(0);
+  let correctCount = 0;
+  for (const id of Object.keys(game.answers)){
+    const a = game.answers[id];
+    counts[a.displayIndex] = (counts[a.displayIndex] || 0) + 1;
+    if (a.correct) correctCount += 1;
+    if (!a.late){
+      const p = spieler(id);
+      if (p){
+        p.score += a.points;
+        p.answeredCount += 1;
+        if (a.correct) p.correctCount += 1;
+      }
+    }
+  }
+  game.counts = counts;
+  game.correctCount = correctCount;
+  game.phase = 'REVEAL';
+  game.closedAt = closedAt;
+  game.lateUntil = closedAt + LATE_GRACE_MS;
+  game.turn = null;
+  game.settleAt = null;
+  game.ranking = rank(rankable());
+  tonSchluss();
+  setTimeout(tonReveal, 800);
+  markDirty();
+}
+
+/* Fristen laufen aus absoluten Zeitstempeln, nie aus Summen von Intervallen. */
+function settleDeadlines(at){
+  for (let schutz = 0; schutz < 4; schutz += 1){
+    if (game.phase === 'PREVIEW' && at >= game.answersOpenAt){ openAnswers(); continue; }
+    if (game.phase === 'OPEN'){
+      const frist = (game.settleAt !== null && game.settleAt < game.closeAt) ? game.settleAt : game.closeAt;
+      if (at >= frist){
+        if (game.modus === 'solo' && game.queue.length > 0){
+          game.phase = 'PASS';
+          markDirty();
+          continue;
+        }
+        closeAndReveal(frist);
+        continue;
+      }
+    }
+    break;
+  }
+}
+
+function hostAdvance(at){
+  if (game.phase === 'LOBBY'){
+    if (game.players.length === 0) return;
+    prepareQuestion(0, at);
+    return;
+  }
+  if (game.phase === 'PREVIEW'){
+    /* Lesefenster vorzeitig beenden: der Host gibt frei. */
+    game.answersOpenAt = at;
+    settleDeadlines(at);
+    return;
+  }
+  if (game.phase === 'OPEN'){
+    game.closeAt = at;
+    settleDeadlines(at);
+    return;
+  }
+  if (game.phase === 'REVEAL'){
+    game.ranking = rank(rankable());
+    game.phase = 'SCOREBOARD';
+    game.afterSeq = game.q.seq;
+    markDirty();
+    return;
+  }
+  if (game.phase === 'SCOREBOARD'){
+    const next = game.afterSeq + 1;
+    game.players.forEach(p => {
+      const r = game.ranking.find(x => x.playerId === p.id);
+      p.letzterRang = r ? r.rank : 0;
+    });
+    if (next < game.questions.length){ prepareQuestion(next, at); }
+    else { toPodium('completed'); }
+    return;
+  }
+  if (game.phase === 'PASS'){
+    openNextTurn(at);
+    return;
+  }
+  if (game.phase === 'PODIUM'){
+    game.phase = 'FINISHED';
+    markDirty();
+    return;
+  }
+}
+
+function toPodium(reason){
+  game.ranking = rank(rankable());
+  game.phase = 'PODIUM';
+  game.endReason = reason;
+  markDirty();
+}
+
+/* =========================================================================
+   Funk: Zustand senden und empfangen
+   ========================================================================= */
+
+function markDirty(){ schmutzig = true; }
+
+function buildState(){
+  const s = {
+    v: 1, t: Date.now(), ph: game.phase, code: game.code, locked: game.locked,
+    titel: game.title, n: game.players.length, cap: ROOM_PLAYER_CAP
+  };
+  if (game.q){
+    s.seq = game.q.seq;
+    s.total = game.q.total;
+    s.tiles = game.q.options.length;
+    s.layout = game.q.layout;
+    s.pf = game.q.pointsFactor;
+    s.announceUntil = game.announceUntil;
+    s.answersOpenAt = game.answersOpenAt;
+    s.openedAt = game.openedAt;
+    s.closeAt = game.closeAt;
+    s.erwartet = connectedCount();
+    s.geantwortet = Object.keys(game.answers).length;
+  }
+  const zeigeErgebnis = game.phase === 'REVEAL' || game.phase === 'SCOREBOARD';
+  if (zeigeErgebnis){
+    s.correct = correctDisplayIndices(game.questions[game.q.seq], game.q.mapping);
+    s.dist = game.counts;
+  }
+  const rangliste = (game.phase === 'SCOREBOARD' || game.phase === 'PODIUM' || game.phase === 'FINISHED' || zeigeErgebnis)
+    ? game.ranking : rank(rankable());
+  const rangVon = {};
+  rangliste.forEach(r => { rangVon[r.playerId] = r; });
+
+  s.sp = game.players.map(p => {
+    const r = rangVon[p.id];
+    const e = { p: p.id, n: p.name, s: p.score, r: r ? r.rank : 0, d: r ? r.deltaToAhead : 0 };
+    const a = game.answers[p.id];
+    if (game.phase === 'OPEN' || game.phase === 'PASS'){ e.a = a ? 1 : 0; }
+    if (zeigeErgebnis){
+      e.a = a ? a.displayIndex : -1;
+      e.c = a ? (a.correct ? 1 : 0) : 0;
+      e.l = a ? (a.late ? 1 : 0) : 0;
+      e.g = a && !a.late ? a.points : 0;
+    }
+    return e;
+  });
+  s.rej = game.rejects.slice(-8);
+  return s;
+}
+
+function byteLaenge(text){
+  try { return new TextEncoder().encode(text).length; } catch (e) { return text.length * 2; }
+}
+
+function sendState(){
+  if (!raum || game.modus !== 'room') return;
+  let s = buildState();
+  if (byteLaenge(JSON.stringify(s)) > STATE_BYTE_BUDGET){
+    s.sp = s.sp.map(e => { const k = Object.assign({}, e); k.n = k.n.slice(0, 8); return k; });
+    s.rej = s.rej.slice(-3);
+  }
+  if (byteLaenge(JSON.stringify(s)) > STATE_BYTE_BUDGET) s.sp = s.sp.slice(0, 30);
+  raum.emit('state', s).catch(() => { /* Funk ist unzuverlässig, das ist eingeplant */ });
+  letzteSendung = Date.now();
+  schmutzig = false;
+}
+
+function reject(peer, reason){
+  game.rejects.push({ p: peer, w: reason, t: Date.now() });
+  if (game.rejects.length > 12) game.rejects.shift();
+  markDirty();
+}
+
+/* ---------- Bühne hört zu ---------- */
+function stageHoeren(){
+  abmelder.push(raum.on('join', (msg) => {
+    if (msg.kind === 'agent') return;
+    const d = msg.data;
+    if (!d || typeof d !== 'object') { reject(msg.peer, 'malformed'); return; }
+    if (typeof d.name !== 'string' || d.name.length > 64){ reject(msg.peer, 'name_invalid'); return; }
+    const r = addPlayer(msg.peer, d.name, Date.now());
+    if (!r.ok){ reject(msg.peer, r.reason); return; }
+    markDirty();
+    sendState();
+  }, () => { /* Funkfehler: die Bühne spielt weiter */ }));
+
+  abmelder.push(raum.on('answer', (msg) => {
+    if (msg.kind === 'agent') return;
+    const d = msg.data;
+    if (!d || typeof d !== 'object') return;
+    if (!Number.isInteger(d.seq) || !Number.isInteger(d.i)) return;
+    if (!game.q || d.seq !== game.q.seq) return;
+    submitAnswer(msg.peer, d.i, Date.now(), null);
+    sendState();
+  }, () => {}));
+
+  abmelder.push(raum.onPeers((change) => {
+    change.left.forEach(p => {
+      const s = spieler(p.peer);
+      if (s){ s.connected = false; markDirty(); }
+    });
+    if (change.joined.length) markDirty();
+  }, () => {}));
+}
+
+/* =========================================================================
+   Rollenwechsel
+   ========================================================================= */
+
+function zeige(screenId){
+  ['s-start','s-editor','s-join','s-stage','s-play'].forEach(id => { $(id).hidden = (id !== screenId); });
+  $('kopf').hidden = (screenId === 's-stage' || screenId === 's-play');
+}
+
+function stoppeTakt(){ if (takt !== null){ clearInterval(takt); takt = null; } }
+
+function verlasseRaum(){
+  abmelder.forEach(f => { try { f(); } catch (e) {} });
+  abmelder = [];
+  if (raum){ try { raum.leave(); } catch (e) {} raum = null; }
+}
+
+function zumStart(){
+  stoppeTakt();
+  verlasseRaum();
+  if (ich.joinTimer){ clearInterval(ich.joinTimer); ich.joinTimer = null; }
+  game = null;
+  rolle = 'start';
+  zeige('s-start');
+  renderStart();
+}
+
+/* =========================================================================
+   Rolle: Bühne
+   ========================================================================= */
+
+async function buehneEroeffnen(){
+  tonWecken();
+  if (!quiz.ok){ zumEditor('Die Fragen haben noch Fehler — die Runde startet erst, wenn sie stimmen.'); return; }
+  const code = makeCode();
+  game = createGame({ modus:'room', code });
+  rolle = 'stage';
+  zeige('s-stage');
+  renderStage();
+  starteTakt(stageTick);
+
+  $('funkstand').textContent = 'Funk wird aufgebaut';
+  const api = await warteAufRoom();
+  if (!api){
+    $('lobbyhinweis').textContent =
+      'Ohne Funk kommt niemand mit dem Telefon herein. Diese Seite spielt dann nur allein am Bildschirm — ' +
+      'zurück zum Anfang und „Allein am Bildschirm" wählen.';
+    return;
+  }
+  try {
+    raum = await api.join(roomName(code));
+  } catch (e) {
+    $('lobbyhinweis').textContent = 'Der Raum ließ sich nicht öffnen (' + (e && e.code ? e.code : 'unbekannt') +
+      '). Lad die Seite neu oder spiel allein am Bildschirm.';
+    return;
+  }
+  stageHoeren();
+  try { raum.presence({ rolle:'buehne', code }); } catch (e) {}
+  $('lobbyhinweis').textContent = '';
+  markDirty();
+}
+
+function stageTick(){
+  const now = Date.now();
+  if (game.phase !== 'LOBBY' && game.phase !== 'PODIUM' && game.phase !== 'FINISHED' && game.q) settleDeadlines(now);
+  if (game.phase === 'OPEN' && game.turn === null){
+    const rest = Math.ceil((game.closeAt - now) / 1000);
+    if (rest > 0 && rest <= 3 && rest !== stageTick.letzterTick){ stageTick.letzterTick = rest; tonTick(); }
+  }
+  renderStage();
+  if (game.modus === 'room' && raum && (schmutzig || now - letzteSendung >= BROADCAST_MS)) sendState();
+}
+
+function starteTakt(fn){
+  stoppeTakt();
+  fn();
+  takt = setInterval(fn, TICK_MS);
+}
+
+/* =========================================================================
+   Rolle: Allein am Bildschirm
+   ========================================================================= */
+
+function alleinStarten(){
+  tonWecken();
+  if (!quiz.ok){ zumEditor('Die Fragen haben noch Fehler — die Runde startet erst, wenn sie stimmen.'); return; }
+  game = createGame({ modus:'solo', code:'' });
+  const gemerkt = erinnere('name');
+  addPlayer('lokal-1', gemerkt || 'Ich', Date.now());
+  rolle = 'solo';
+  zeige('s-stage');
+  renderStage();
+  starteTakt(stageTick);
+}
+
+function soloDazu(){
+  const feld = $('solonamefeld');
+  const r = addPlayer('lokal-' + (game.players.length + 1), feld.value, Date.now());
+  if (!r.ok){
+    $('lobbyhinweis').textContent = ablehnText(r.reason);
+    return;
+  }
+  feld.value = '';
+  $('lobbyhinweis').textContent = '';
+  markDirty();
+  renderStage();
+}
+
+/* =========================================================================
+   Rolle: Spielergerät
+   ========================================================================= */
+
+async function warteAufRoom(){
+  if (roomBereit) return roomApi;
+  for (let i = 0; i < 60; i += 1){
+    await new Promise(r => setTimeout(r, 200));
+    if (roomBereit) return roomApi;
+  }
+  return roomApi;
+}
+
+async function mitspielen(){
+  const roh = cleanCode($('codefeld').value);
+  const name = normalizeName($('namefeld').value);
+  if (roh.code.length !== 4){
+    $('joinfehler').textContent = 'Der Code hat vier Zeichen. Schau nochmal auf den großen Bildschirm.';
+    return;
+  }
+  if (name === null){
+    $('joinfehler').textContent = 'Der Name passt so nicht: 1 bis 16 Zeichen, Buchstaben, Ziffern, Leerzeichen, - _ .';
+    return;
+  }
+  $('joinfehler').textContent = '';
+  $('btn-join').disabled = true;
+  merke('name', name);
+  merke('code', roh.code);
+
+  const api = await warteAufRoom();
+  if (!api){
+    $('btn-join').disabled = false;
+    $('joinfehler').innerHTML =
+      'Dieses Gerät bekommt keine Verbindung zur Runde. Das passiert, wenn die Seite ohne Anmeldung geöffnet ist. ' +
+      'Du kannst: den Link in einem angemeldeten Browser öffnen — oder am großen Bildschirm mitraten und dort ' +
+      '„Allein am Bildschirm" spielen.';
+    return;
+  }
+
+  ich.name = name;
+  ich.code = roh.code;
+  ich.bestaetigt = false;
+  ich.fehlerGezeigt = false;
+  ich.abgegeben = null;
+  ich.letzterState = null;
+  ich.stagePeer = null;
+  ich.joinSeit = Date.now();
+
+  try {
+    raum = await api.join(roomName(roh.code));
+  } catch (e) {
+    $('btn-join').disabled = false;
+    const code = e && e.code ? e.code : 'unbekannt';
+    $('joinfehler').textContent = code === 'not_permitted'
+      ? 'Dieses Gerät darf in dieser Runde nicht funken. Frag den Gastgeber, ob er dich einlädt — oder rate am großen Bildschirm mit.'
+      : 'Der Raum ließ sich nicht öffnen (' + code + '). Versuch es gleich nochmal.';
+    return;
+  }
+
+  abmelder.push(raum.onPeers((change) => {
+    const mich = change.peers.find(p => p.isMe && p.sameTab);
+    if (mich) ich.peer = mich.peer;
+  }, () => {}));
+  abmelder.push(raum.on('state', (msg) => empfangeState(msg), () => {}));
+
+  try { raum.presence({ rolle:'spieler', n: name }); } catch (e) {}
+
+  rolle = 'play';
+  zeige('s-play');
+  renderPlay();
+  starteTakt(playTick);
+
+  joinSenden();
+  ich.joinTimer = setInterval(() => {
+    if (ich.bestaetigt){ clearInterval(ich.joinTimer); ich.joinTimer = null; return; }
+    joinSenden();
+  }, JOIN_WIEDERHOLUNG_MS);
+}
+
+function joinSenden(){
+  if (!raum) return;
+  raum.emit('join', { name: ich.name }).catch((e) => {
+    const code = e && e.code ? e.code : '';
+    if (code === 'not_permitted' && !ich.fehlerGezeigt){
+      ich.fehlerGezeigt = true;
+      zeigeVoll('neutral', null, 'Darf nicht funken',
+        'Dieses Gerät darf in dieser Runde nichts senden. Der Gastgeber müsste dich einladen. ' +
+        'Bis dahin: am großen Bildschirm mitraten.', true);
+      if (ich.joinTimer){ clearInterval(ich.joinTimer); ich.joinTimer = null; }
+    }
+  });
+}
+
+function empfangeState(msg){
+  if (msg.kind === 'agent') return;
+  const s = msg.data;
+  if (!s || typeof s !== 'object' || s.v !== 1) return;
+  if (s.code !== ich.code) return;
+  const jetzt = Date.now();
+  if (ich.stagePeer && ich.stagePeer !== msg.peer && jetzt - ich.letzterStateAt < STAGE_PIN_FREI_MS) return;
+  ich.stagePeer = msg.peer;
+  ich.letzterState = s;
+  ich.letzterStateAt = jetzt;
+  ich.versatz = (typeof s.t === 'number' ? s.t : jetzt) - jetzt;
+
+  if (!ich.bestaetigt && ich.peer){
+    const mich = Array.isArray(s.sp) ? s.sp.find(e => e && e.p === ich.peer) : null;
+    if (mich){
+      ich.bestaetigt = true;
+      if (ich.joinTimer){ clearInterval(ich.joinTimer); ich.joinTimer = null; }
+    } else if (Array.isArray(s.rej)){
+      const r = s.rej.find(e => e && e.p === ich.peer);
+      if (r && !ich.fehlerGezeigt){
+        ich.fehlerGezeigt = true;
+        if (ich.joinTimer){ clearInterval(ich.joinTimer); ich.joinTimer = null; }
+        zeigeVoll('neutral', null, 'Klappt nicht', ablehnText(r.w), true);
+      }
+    }
+  }
+  if (s.seq !== undefined && ich.abgegeben && ich.abgegeben.seq !== s.seq) ich.abgegeben = null;
+  renderPlay();
+}
+
+function ablehnText(grund){
+  switch (grund){
+    case 'name_taken':   return 'Den Namen hat schon jemand. Nimm einen anderen.';
+    case 'name_invalid': return 'Der Name passt so nicht: 1 bis 16 Zeichen, Buchstaben, Ziffern, Leerzeichen, - _ .';
+    case 'locked':       return 'Der Beitritt ist gesperrt. Der Gastgeber kann wieder aufmachen.';
+    case 'capacity':     return 'Die Runde ist voll (' + ROOM_PLAYER_CAP + ' Leute).';
+    case 'finished':     return 'Die Runde ist schon durch. Beim nächsten Mal.';
+    default:             return 'Die Bühne hat das abgelehnt (' + grund + ').';
+  }
+}
+
+function playTick(){
+  /* Ein Funkspruch kann verlorengehen: quittiert die Bühne nicht, geht er nochmal raus. */
+  const s = ich.letzterState;
+  if (raum && s && s.ph === 'OPEN' && ich.abgegeben && ich.abgegeben.seq === s.seq){
+    const mich = Array.isArray(s.sp) ? s.sp.find(e => e && e.p === ich.peer) : null;
+    const jetzt = Date.now();
+    if (mich && !mich.a && jetzt - ich.abgegeben.gesendet > 1500 && jetzt + ich.versatz < s.closeAt){
+      ich.abgegeben.gesendet = jetzt;
+      raum.emit('answer', { seq: ich.abgegeben.seq, i: ich.abgegeben.i }).catch(() => {});
+    }
+  }
+  renderPlay();
+}
+
+function antwortTippen(displayIndex){
+  const s = ich.letzterState;
+  if (!s || s.ph !== 'OPEN' || ich.abgegeben || !raum) return;
+  const jetzt = Date.now();
+  if (jetzt + ich.versatz > s.closeAt) return;
+  ich.abgegeben = { seq: s.seq, i: displayIndex, at: jetzt, gesendet: jetzt };
+  raum.emit('answer', { seq: s.seq, i: displayIndex }).catch(() => {});
+  try { if (navigator.vibrate) navigator.vibrate(10); } catch (e) {}
+  renderPlay();
+}
+
+/* =========================================================================
+   Darstellung
+   ========================================================================= */
+
+function renderStart(){
+  const z = $('quizstand');
+  if (quiz.ok){
+    z.innerHTML = 'Geladen: <b>' + esc(quiz.titel) + '</b> — ' + quiz.questions.length +
+      (quiz.questions.length === 1 ? ' Frage' : ' Fragen');
+  } else {
+    z.innerHTML = '<b>Die Fragen haben noch Fehler.</b> Schau in den Editor.';
+  }
+}
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function setzeKachel(el, display, anzahl, label, interaktiv){
+  const farbIdx = tileColorIndex(display, anzahl);
+  el.dataset.farbe = FARBEN[farbIdx];
+  el.dataset.i = String(display);
+  el.innerHTML =
+    '<svg class="form" aria-hidden="true"><use href="#' + FORMEN[farbIdx] + '"></use></svg>' +
+    (label !== null ? '<span class="text">' + esc(label) + '</span>' : '') +
+    '<span class="marke" hidden></span>' +
+    '<span class="balken"></span>';
+  el.classList.toggle('tippbar', !!interaktiv);
+}
+
+/* ---------- Bühne ---------- */
+function renderStage(){
+  const now = Date.now();
+  const g = game;
+  const solo = g.modus === 'solo';
+
+  const inLobby = g.phase === 'LOBBY';
+  const inFrage = g.phase === 'PREVIEW' || g.phase === 'OPEN' || g.phase === 'REVEAL';
+  const inPass = g.phase === 'PASS';
+  const inBoard = g.phase === 'SCOREBOARD';
+  const inPodium = g.phase === 'PODIUM' || g.phase === 'FINISHED';
+
+  $('stage-lobby').hidden = !inLobby;
+  $('stage-frage').hidden = !inFrage;
+  $('stage-pass').hidden = !inPass;
+  $('stage-board').hidden = !inBoard;
+  $('stage-podium').hidden = !inPodium;
+
+  /* Kopf */
+  $('b-zaehler').textContent = g.q && !inLobby ? ('Frage ' + (g.q.seq + 1) + ' / ' + g.q.total) : (solo ? 'Allein am Bildschirm' : 'Lobby');
+  const pw = $('b-punktwert');
+  pw.hidden = !(g.q && g.q.pointsFactor !== 1);
+  if (!pw.hidden) pw.textContent = g.q.pointsFactor + '×';
+  $('b-phase').textContent =
+    g.phase === 'PREVIEW' ? (now < g.announceUntil ? 'Gleich geht’s los' : 'Lesen') :
+    g.phase === 'OPEN' ? (g.turn !== null ? (spieler(g.turn) ? spieler(g.turn).name + ' ist dran' : 'Antworten') : 'Antworten') :
+    g.phase === 'REVEAL' ? 'Auflösung' :
+    g.phase === 'PASS' ? 'Weitergeben' : '';
+  const ecke = $('b-codeecke');
+  ecke.hidden = solo || inLobby;
+  if (!ecke.hidden) ecke.querySelector('b').textContent = g.code;
+
+  if (inLobby) renderLobby(solo);
+  if (inFrage) renderFrage(now, solo);
+  if (inPass) $('pass-name').textContent = g.queue.length ? (spieler(g.queue[0]) ? spieler(g.queue[0]).name : '') : '';
+  if (inBoard) renderBoard();
+  if (inPodium) renderPodium();
+
+  /* Knöpfe */
+  const w = $('btn-weiter');
+  w.hidden = inPass;
+  w.disabled = (inLobby && g.players.length === 0);
+  w.textContent =
+    inLobby ? 'Los geht’s' :
+    g.phase === 'PREVIEW' ? 'Antworten freigeben' :
+    g.phase === 'OPEN' ? 'Frage schließen' :
+    g.phase === 'REVEAL' ? 'Zwischenstand' :
+    inBoard ? (g.afterSeq + 1 < g.questions.length ? 'Nächste Frage' : 'Podium') :
+    g.phase === 'PODIUM' ? 'Runde abschließen' : 'Fertig';
+  if (g.phase === 'FINISHED'){ w.textContent = 'Zurück zum Anfang'; }
+  $('btn-sperren').hidden = solo || !inLobby;
+  $('btn-sperren').textContent = g.locked ? 'Beitritt öffnen' : 'Beitritt sperren';
+  $('btn-sperren').setAttribute('aria-pressed', g.locked ? 'true' : 'false');
+  $('btn-ton').textContent = tonAn ? 'Ton an' : 'Ton aus';
+  $('btn-ton').setAttribute('aria-pressed', tonAn ? 'true' : 'false');
+}
+
+function renderLobby(solo){
+  const g = game;
+  const cg = $('codegross');
+  if (solo){
+    cg.textContent = 'Bereit?';
+    cg.classList.remove('gesperrt');
+    $('beitrittshinweis').innerHTML = 'Ein Gerät, reihum am Tisch. Jede Frage steht erst für alle da, ' +
+      'danach ist jeder einzeln dran.';
+  } else {
+    cg.textContent = g.code;
+    cg.classList.toggle('gesperrt', g.locked);
+    const adresse = location.host + location.pathname;
+    $('beitrittshinweis').innerHTML = 'Gleiche Seite öffnen:<br><b>' + esc(adresse) +
+      '</b><br>dann „Mitspielen" und den Code eintippen.';
+  }
+  $('soloaufnahme').hidden = !solo;
+
+  const zahl = $('spielerzahl');
+  zahl.innerHTML = g.players.length === 0
+    ? (solo ? 'Noch niemand eingetragen.' : 'Noch niemand da.')
+    : '<b>' + g.players.length + '</b> ' + (g.players.length === 1 ? 'ist dabei' : 'sind dabei');
+
+  const feld = $('spielerfeld');
+  const sollen = g.players.slice(0, PLAYER_SOFT_WARN).map(p => p.id + '|' + p.name + '|' + (p.connected ? '1' : '0')).join(',');
+  if (feld.dataset.stand !== sollen){
+    feld.dataset.stand = sollen;
+    feld.innerHTML = '';
+    g.players.slice(0, PLAYER_SOFT_WARN).forEach(p => {
+      const d = document.createElement('div');
+      d.className = 'namenskachel' + (p.connected ? '' : ' weg');
+      d.textContent = p.name;
+      feld.appendChild(d);
+    });
+    if (g.players.length > PLAYER_SOFT_WARN){
+      const d = document.createElement('div');
+      d.className = 'namenskachel weg';
+      d.textContent = 'und ' + (g.players.length - PLAYER_SOFT_WARN) + ' weitere';
+      feld.appendChild(d);
+    }
+  }
+}
+
+function renderFrage(now, solo){
+  const g = game;
+  const q = g.q;
+  const lesefenster = g.phase === 'PREVIEW';
+  const ankuendigung = lesefenster && now < g.announceUntil;
+
+  $('b-frage').textContent = ankuendigung ? ('Frage ' + (q.seq + 1) + ' von ' + q.total) : q.prompt;
+
+  /* Kacheln */
+  const kf = $('b-kacheln');
+  kf.dataset.anordnung = q.layout;
+  const soll = q.seq + '|' + q.options.map(o => o.label).join('\u0001');
+  if (kf.dataset.stand !== soll){
+    kf.dataset.stand = soll;
+    kf.innerHTML = '';
+    q.options.forEach(o => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'kachel';
+      b.id = 'b-kachel-' + o.index;
+      setzeKachel(b, o.index, q.options.length, o.label, false);
+      b.addEventListener('click', () => soloTipp(o.index));
+      kf.appendChild(b);
+    });
+  }
+  kf.hidden = ankuendigung;
+
+  const soloAktiv = solo && g.phase === 'OPEN' && g.turn !== null && !g.answers[g.turn];
+  Array.prototype.forEach.call(kf.children, (b, i) => {
+    b.classList.toggle('tippbar', soloAktiv);
+    b.disabled = !soloAktiv;
+    const marke = b.querySelector('.marke');
+    const balken = b.querySelector('.balken');
+    if (g.phase === 'REVEAL'){
+      const richtig = correctDisplayIndices(g.questions[q.seq], q.mapping).indexOf(i) >= 0;
+      b.dataset.zustand = richtig ? 'richtig' : 'falsch';
+      marke.hidden = false;
+      marke.textContent = richtig ? '✓' : '✕';
+      const max = Math.max(1, Math.max.apply(null, g.counts.concat([1])));
+      balken.style.width = Math.round((g.counts[i] || 0) / max * 100) + '%';
+    } else {
+      b.dataset.zustand = '';
+      marke.hidden = true;
+      balken.style.width = '0%';
+    }
+  });
+
+  /* Timer */
+  const ring = $('ring-lauf');
+  const umfang = 2 * Math.PI * 52;
+  ring.setAttribute('stroke-dasharray', String(umfang));
+  let anteil = 1;
+  let restSek = 0;
+  let wort = 'Sekunden';
+  if (lesefenster){
+    const von = g.announceUntil, bis = g.answersOpenAt;
+    anteil = 1;
+    restSek = Math.max(0, Math.ceil(q.timeLimitMs / 1000));
+    wort = ankuendigung ? 'gleich' : 'Lesen';
+    const fortschritt = ankuendigung ? 0 : Math.min(1, Math.max(0, (now - von) / Math.max(1, bis - von)));
+    ring.setAttribute('stroke-dashoffset', String(umfang * fortschritt));
+    $('b-timer').classList.remove('knapp');
+  } else if (g.phase === 'OPEN'){
+    const rest = Math.max(0, g.closeAt - now);
+    anteil = Math.min(1, rest / Math.max(1, q.timeLimitMs));
+    restSek = Math.ceil(rest / 1000);
+    ring.setAttribute('stroke-dashoffset', String(umfang * (1 - anteil)));
+    $('b-timer').classList.toggle('knapp', anteil <= 0.25);
+  } else {
+    restSek = 0;
+    ring.setAttribute('stroke-dashoffset', String(umfang));
+    $('b-timer').classList.remove('knapp');
+  }
+  $('b-restzeit').textContent = lesefenster && ankuendigung ? '·' : String(restSek);
+  $('b-timerwort').textContent = wort;
+
+  /* Zähler */
+  const erwartet = g.turn !== null ? 1 : connectedCount();
+  const geantwortet = Object.keys(g.answers).length;
+  $('b-antwortzahl').textContent = g.phase === 'PREVIEW' ? String(g.players.length) : String(geantwortet);
+  $('b-zaehlwort').textContent = g.phase === 'PREVIEW' ? 'dabei' : ('von ' + Math.max(erwartet, geantwortet));
+
+  /* Ausklang */
+  const a = $('b-ausklang');
+  if (g.phase === 'REVEAL'){
+    const n = geantwortet;
+    const r = g.correctCount;
+    let zeile;
+    if (n === 0) zeile = 'Niemand hat geantwortet.';
+    else if (r === 0) zeile = 'Keiner. Respekt an die Frage.';
+    else if (r === n && n === g.players.length) zeile = 'Alle. Zu einfach.';
+    else zeile = '<b>' + r + '</b> von ' + n + ' richtig.';
+    const e = explanationOf(g.questions[q.seq]);
+    a.innerHTML = zeile + (e ? ' ' + esc(e) : '');
+  } else if (lesefenster && !ankuendigung){
+    a.textContent = 'Lesen. Der Timer steht still.';
+  } else {
+    a.textContent = '';
+  }
+}
+
+function soloTipp(displayIndex){
+  if (game.modus !== 'solo') return;
+  if (game.phase !== 'OPEN' || game.turn === null) return;
+  submitAnswer(game.turn, displayIndex, Date.now(), null);
+  renderStage();
+}
+
+function renderBoard(){
+  const g = game;
+  $('board-titel').textContent = 'Zwischenstand nach Frage ' + (g.afterSeq + 1);
+  const zeilen = $('board-zeilen');
+  const soll = g.afterSeq + '|' + g.ranking.map(r => r.playerId + r.score + r.rank).join(',');
+  if (zeilen.dataset.stand === soll) return;
+  zeilen.dataset.stand = soll;
+  zeilen.innerHTML = '';
+  g.ranking.slice(0, 5).forEach(r => {
+    const p = spieler(r.playerId);
+    const alt = p ? p.letzterRang : 0;
+    const d = document.createElement('div');
+    d.className = 'standzeile';
+    let pfeil = '—', richtung = 'gleich';
+    if (alt > 0 && alt > r.rank){ pfeil = '▲ ' + (alt - r.rank); richtung = 'hoch'; }
+    else if (alt > 0 && alt < r.rank){ pfeil = '▼ ' + (r.rank - alt); richtung = 'runter'; }
+    d.innerHTML = '<span class="platz zahl">' + r.rank + '</span>' +
+      '<span class="name">' + esc(r.displayName) + '</span>' +
+      '<span class="pfeil" data-richtung="' + richtung + '">' + pfeil + '</span>' +
+      '<span class="punkte zahl">' + r.score + '</span>';
+    zeilen.appendChild(d);
+  });
+  const rest = g.ranking.length - 5;
+  $('board-rest').textContent = rest > 0 ? ('und ' + rest + ' weitere') : '';
+}
+
+function renderPodium(){
+  const g = game;
+  const top = g.ranking.slice(0, 3);
+  const reihenfolge = [1, 0, 2];
+  const el = $('podeste');
+  const soll = g.ranking.map(r => r.playerId + r.score).join(',');
+  if (el.dataset.stand === soll) return;
+  el.dataset.stand = soll;
+  el.innerHTML = '';
+  reihenfolge.forEach(i => {
+    if (!top[i]) return;
+    const r = top[i];
+    const d = document.createElement('div');
+    d.className = 'podest';
+    d.dataset.rang = String(r.rank);
+    d.innerHTML = '<div class="pname">' + esc(r.displayName) + '</div>' +
+      '<div class="ppunkte zahl">' + r.score + '</div>' +
+      '<div class="block zahl">' + r.rank + '</div>';
+    el.appendChild(d);
+  });
+  const rest = g.ranking.slice(3, 8).map(r => r.rank + '. ' + r.displayName + ' · ' + r.score);
+  $('podium-rest').textContent = rest.join('   ');
+}
+
+/* ---------- Spielergerät ---------- */
+function zeigeVoll(ton, glyph, wort, unterzeile, zurueck){
+  $('p-kacheln').hidden = true;
+  $('p-zeitleiste').hidden = true;
+  const v = $('p-voll');
+  v.hidden = false;
+  v.dataset.ton = ton;
+  const g = $('p-glyph');
+  if (glyph){ g.hidden = false; g.querySelector('use').setAttribute('href', '#' + glyph); } else { g.hidden = true; }
+  $('p-wort').textContent = wort || '';
+  $('p-punkte').hidden = true;
+  $('p-unterzeile').textContent = unterzeile || '';
+  $('btn-play-zurueck').hidden = !zurueck;
+}
+
+function renderPlay(){
+  const s = ich.letzterState;
+  const jetzt = Date.now();
+
+  /* Band oben: Verbindung und Wartezustand */
+  const band = $('p-band');
+  if (ich.fehlerGezeigt){ band.hidden = true; }
+  else if (!ich.bestaetigt){
+    band.hidden = false;
+    const wartet = jetzt - ich.joinSeit;
+    band.textContent = wartet < JOIN_FRIST_MS
+      ? 'Ich melde dich an …'
+      : (s ? 'Die Bühne hört uns nicht. Vielleicht ist der Name schon vergeben — zurück und anderen Namen nehmen.'
+           : 'Keine Bühne auf Code ' + ich.code + '. Prüf den Code, oder die Bühne ist noch nicht offen.');
+  } else if (s && jetzt - ich.letzterStateAt > BUEHNE_STILL_MS){
+    band.hidden = false;
+    band.textContent = 'Die Bühne ist still. Ich versuch’s weiter.';
+  } else if (s && s.ph === 'PREVIEW' && s.announceUntil !== undefined && jetzt >= s.announceUntil - ich.versatz){
+    band.hidden = false;
+    band.textContent = 'LESEN — schau nach vorn.';
+  } else {
+    band.hidden = true;
+  }
+
+  if (ich.fehlerGezeigt) return;
+
+  if (!s || !ich.bestaetigt){
+    zeigeVoll('warten', null, 'Moment', ich.name ? 'Du heißt heute ' + ich.name + '.' : '', jetzt - ich.joinSeit > JOIN_FRIST_MS);
+    $('p-eigenname').textContent = ich.name;
+    $('p-punktestand').textContent = '';
+    return;
+  }
+
+  const mich = Array.isArray(s.sp) ? s.sp.find(e => e && e.p === ich.peer) : null;
+  $('p-eigenname').innerHTML = '<b>' + esc(mich ? mich.n : ich.name) + '</b>';
+  $('p-punktestand').textContent = mich ? (mich.s + ' Punkte') : '';
+
+  const v = $('p-voll');
+  const kf = $('p-kacheln');
+  const leiste = $('p-zeitleiste');
+
+  if (s.ph === 'LOBBY'){
+    zeigeVoll('warten', null, 'Du bist dabei.', 'Schau nach vorn. ' + s.n + (s.n === 1 ? ' Person wartet.' : ' Leute warten.'), false);
+    return;
+  }
+  if (s.ph === 'PREVIEW' || s.ph === 'OPEN' || s.ph === 'PASS'){
+    const lokalOeffnet = s.answersOpenAt - ich.versatz;
+    const lokalAnkuend = s.announceUntil - ich.versatz;
+    const lokalSchluss = s.closeAt - ich.versatz;
+    const offen = s.ph === 'OPEN';
+    const ankuendigung = s.ph === 'PREVIEW' && jetzt < lokalAnkuend;
+
+    if (ich.abgegeben && ich.abgegeben.seq === s.seq){
+      const idx = ich.abgegeben.i;
+      const farbe = FARBEN[tileColorIndex(idx, s.tiles)];
+      zeigeVoll(farbe, FORMEN[tileColorIndex(idx, s.tiles)], 'Abgegeben',
+        (s.geantwortet || 1) + ' von ' + Math.max(s.erwartet || 1, s.geantwortet || 1) + ' sind fertig.', false);
+      return;
+    }
+    if (ankuendigung){
+      zeigeVoll('warten', null, 'Frage ' + (s.seq + 1), 'von ' + s.total + '. Kopf hoch.', false);
+      return;
+    }
+
+    v.hidden = true;
+    kf.hidden = false;
+    leiste.hidden = false;
+    kf.dataset.anordnung = s.layout === 'duo' ? 'duo' : 'quad';
+    kf.dataset.gesperrt = offen ? 'nein' : 'ja';
+
+    const soll = s.seq + '|' + s.tiles;
+    if (kf.dataset.stand !== soll){
+      kf.dataset.stand = soll;
+      kf.innerHTML = '';
+      for (let i = 0; i < s.tiles; i += 1){
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'kachel';
+        b.id = 'p-kachel-' + i;
+        b.setAttribute('aria-label', 'Antwort ' + (i + 1));
+        setzeKachel(b, i, s.tiles, null, true);
+        b.addEventListener('click', () => {
+          if ($('p-kacheln').dataset.gesperrt === 'ja'){
+            b.classList.remove('wackelt'); void b.offsetWidth; b.classList.add('wackelt');
+            return;
+          }
+          antwortTippen(i);
+        });
+        kf.appendChild(b);
+      }
+    }
+    if (offen){
+      const rest = Math.max(0, lokalSchluss - jetzt);
+      const anteil = Math.min(1, rest / Math.max(1, lokalSchluss - (s.openedAt - ich.versatz)));
+      leiste.firstElementChild.style.width = (anteil * 100) + '%';
+      leiste.classList.toggle('knapp', anteil <= 0.25);
+    } else {
+      const fort = Math.min(1, Math.max(0, (jetzt - lokalAnkuend) / Math.max(1, lokalOeffnet - lokalAnkuend)));
+      leiste.firstElementChild.style.width = (fort * 100) + '%';
+      leiste.classList.remove('knapp');
+    }
+    return;
+  }
+  if (s.ph === 'REVEAL'){
+    if (!mich){ zeigeVoll('warten', null, 'Auflösung', 'Schau nach vorn.', false); return; }
+    if (mich.a === -1 || mich.a === undefined){
+      zeigeVoll('neutral', null, 'Keine Antwort', 'Platz ' + mich.r + (mich.d ? ' · ' + mich.d + ' zurück' : ''), false);
+      return;
+    }
+    if (mich.l){
+      zeigeVoll('neutral', null, 'Zu spät', '+0 · Platz ' + mich.r, false);
+      return;
+    }
+    if (mich.c){
+      zeigeVoll('richtig', 'f-haken', 'Richtig', 'Platz ' + mich.r + (mich.d ? ' · ' + mich.d + ' zurück' : ' · ganz oben'), false);
+      $('p-punkte').hidden = false;
+      $('p-punkte').textContent = '+' + mich.g;
+    } else {
+      zeigeVoll('falsch', 'f-kreuz', 'Daneben', 'Platz ' + mich.r + (mich.d ? ' · ' + mich.d + ' zurück' : ''), false);
+      $('p-punkte').hidden = false;
+      $('p-punkte').textContent = '+0';
+    }
+    return;
+  }
+  if (s.ph === 'SCOREBOARD'){
+    zeigeVoll('warten', null, mich ? ('Platz ' + mich.r) : 'Zwischenstand',
+      mich ? (mich.s + ' Punkte' + (mich.d ? ' · ' + mich.d + ' zurück' : '')) : 'Schau nach vorn.', false);
+    return;
+  }
+  if (s.ph === 'PODIUM' || s.ph === 'FINISHED'){
+    zeigeVoll(mich && mich.r === 1 ? 'sonne' : 'warten', null,
+      mich ? ('Platz ' + mich.r) : 'Runde beendet',
+      mich ? ('von ' + s.n + ' · ' + mich.s + ' Punkte · Danke fürs Mitspielen.') : 'Danke fürs Mitspielen.', true);
+    return;
+  }
+}
+
+/* =========================================================================
+   Editor
+   ========================================================================= */
+
+function zumEditor(meldung){
+  rolle = 'editor';
+  zeige('s-editor');
+  $('editormeldung').textContent = meldung || '';
+  if (!$('editorfeld').value) $('editorfeld').value = erinnere('quiztext') || DEMO_TEXT;
+}
+
+function editorUebernehmen(){
+  const text = $('editorfeld').value;
+  const erg = parseQuiz(text);
+  const m = $('editormeldung');
+  if (!erg.ok){
+    m.innerHTML = '<b>Das passt noch nicht:</b><ul>' + erg.fehler.map(f => '<li>' + esc(f) + '</li>').join('') + '</ul>';
+    return;
+  }
+  quiz = erg;
+  merke('quiztext', text);
+  if (schnappschuss) schnappschuss();
+  m.textContent = '';
+  zumStart();
+}
+
+/* =========================================================================
+   Verdrahtung
+   ========================================================================= */
+
+function boot(){
+  $('editorfeld').value = erinnere('quiztext') || DEMO_TEXT;
+  const gespeichert = parseQuiz($('editorfeld').value);
+  if (gespeichert.ok) quiz = gespeichert;
+  $('namefeld').value = erinnere('name');
+  $('codefeld').value = erinnere('code');
+  renderStart();
+
+  $('btn-buehne').addEventListener('click', buehneEroeffnen);
+  $('btn-allein').addEventListener('click', alleinStarten);
+  $('btn-mitspielen').addEventListener('click', () => { rolle = 'join'; zeige('s-join'); $('codefeld').focus(); });
+  $('btn-editor').addEventListener('click', () => zumEditor(''));
+  $('btn-editor-zurueck').addEventListener('click', zumStart);
+  $('btn-editor-demo').addEventListener('click', () => { $('editorfeld').value = DEMO_TEXT; $('editormeldung').textContent = ''; });
+  $('btn-editor-uebernehmen').addEventListener('click', editorUebernehmen);
+  $('btn-join').addEventListener('click', mitspielen);
+  $('btn-join-zurueck').addEventListener('click', zumStart);
+  $('btn-play-zurueck').addEventListener('click', zumStart);
+  $('btn-stage-ende').addEventListener('click', () => {
+    if (game && game.phase !== 'LOBBY' && game.phase !== 'PODIUM' && game.phase !== 'FINISHED'){ toPodium('host_ended'); renderStage(); }
+    else zumStart();
+  });
+  $('btn-solo-add').addEventListener('click', soloDazu);
+  $('solonamefeld').addEventListener('keydown', (e) => { if (e.key === 'Enter') soloDazu(); });
+  $('btn-pass').addEventListener('click', () => { hostAdvance(Date.now()); renderStage(); });
+  $('btn-ton').addEventListener('click', () => {
+    tonAn = !tonAn;
+    if (tonAn) tonWecken();
+    renderStage();
+  });
+  $('btn-sperren').addEventListener('click', () => { game.locked = !game.locked; markDirty(); renderStage(); });
+  $('btn-weiter').addEventListener('click', () => {
+    if (!game) return;
+    if (game.phase === 'FINISHED'){ zumStart(); return; }
+    tonWecken();
+    hostAdvance(Date.now());
+    renderStage();
+  });
+
+  $('codefeld').addEventListener('input', () => {
+    const r = cleanCode($('codefeld').value);
+    $('codefeld').value = r.code;
+    if (r.verworfen > 0){
+      $('joinfehler').textContent = 'Im Code stecken nur Zeichen, die man nicht verwechseln kann — kein 0 oder O, kein 1, I oder L.';
+    }
+  });
+  $('namefeld').addEventListener('keydown', (e) => { if (e.key === 'Enter') mitspielen(); });
+
+  document.addEventListener('keydown', (e) => {
+    if (rolle !== 'stage' && rolle !== 'solo') return;
+    const ziel = e.target;
+    if (ziel && (ziel.tagName === 'INPUT' || ziel.tagName === 'TEXTAREA')) return;
+    if (e.key === ' ' || e.key === 'Spacebar'){
+      e.preventDefault();
+      tonWecken();
+      if (game.phase === 'PASS') hostAdvance(Date.now());
+      else hostAdvance(Date.now());
+      renderStage();
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if ((rolle === 'stage' || rolle === 'solo') && game){ stageTick(); }
+    if (rolle === 'play') renderPlay();
+  });
+
+  /* Laufzeitfähigkeit: die Seite steht vollständig, bevor sie antwortet. */
+  const stand = $('funkstand');
+  if (window.claude && typeof window.claude.use === 'function'){
+    window.claude.use('room').then((api) => {
+      roomApi = api; roomBereit = true;
+      stand.dataset.stand = api ? 'an' : 'aus';
+      stand.textContent = api ? 'Funk steht' : 'Kein Funk — allein am Bildschirm';
+    }).catch(() => {
+      roomApi = null; roomBereit = true;
+      stand.dataset.stand = 'aus';
+      stand.textContent = 'Kein Funk — allein am Bildschirm';
+    });
+  } else {
+    roomApi = null; roomBereit = true;
+    stand.dataset.stand = 'aus';
+    stand.textContent = 'Kein Funk — allein am Bildschirm';
+  }
+
+  /* Neuveröffentlichung: Rolle und Fragen retten, nicht den laufenden Punktestand. */
+  try {
+    const hot = window.claude && window.claude.hot ? window.claude.hot : null;
+    const start = (daten) => {
+      if (daten && typeof daten.quiztext === 'string'){
+        const p = parseQuiz(daten.quiztext);
+        if (p.ok){ quiz = p; $('editorfeld').value = daten.quiztext; renderStart(); }
+      }
+      if (daten && typeof daten.name === 'string' && daten.name) $('namefeld').value = daten.name;
+    };
+    if (hot && typeof hot.ready === 'function') hot.ready(start);
+    else start(hot && hot.data ? hot.data : {});
+    if (hot && typeof hot.snapshot === 'function') schnappschuss = () => {
+      try { hot.snapshot({ quiztext: $('editorfeld').value, name: ich.name || $('namefeld').value }); } catch (e) {}
+    };
+  } catch (e) { /* hot gibt es außerhalb des Betrachters nicht */ }
+}
+
+if (typeof document !== 'undefined') boot();
+</script>
