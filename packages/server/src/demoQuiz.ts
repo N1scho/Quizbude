@@ -1,5 +1,6 @@
 import {
   createDefaultRegistry,
+  loadQuestion,
   type LoadedQuestion,
   type QuestionTypeRegistry,
 } from '@quizbude/core';
@@ -46,15 +47,10 @@ export function loadDemoQuiz(registry: QuestionTypeRegistry = createDefaultRegis
     },
   ] as const;
 
-  const questions: LoadedQuestion[] = raw.map((q) => ({
-    id: q.id,
-    type: q.type,
-    prompt: q.prompt,
-    timeLimitMs: q.timeLimitMs,
-    pointsFactor: q.pointsFactor,
-    // Autorenzeit: die Spezifikation wird einmal geprueft und normalisiert.
-    spec: registry.get(q.type).parseSpec(q.spec),
-  }));
+  // Autorenzeit: Fragetext UND Spezifikation werden einmal geprueft und
+  // normalisiert. Auch das Demo-Quiz geht durch dieselbe Tuer wie spaeter
+  // der Editor - sonst haelt die Grenze nur dort, wo jemand an sie denkt.
+  const questions: LoadedQuestion[] = raw.map((q) => loadQuestion(q, registry));
 
   return { title: 'Quizbude — Demorunde', questions };
 }
