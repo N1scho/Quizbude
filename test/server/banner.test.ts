@@ -10,9 +10,13 @@ const ADRESSEN: readonly LanAddress[] = [
 const text = (zeilen: readonly string[]): string => zeilen.join('\n');
 
 describe('Die Startmeldung', () => {
+  /**
+   * Nicht `localhost`: gebunden wird auf `0.0.0.0`, und unter Windows
+   * loest `localhost` zuerst nach `::1` auf - dort lauscht niemand.
+   */
   it('nennt die Buehne fuer diesen Bildschirm mit dem genommenen Port', () => {
     expect(text(stageBanner({ port: 3007, addresses: ADRESSEN, rooms: 0 }))).toContain(
-      'http://localhost:3007/host/',
+      'http://127.0.0.1:3007/host/',
     );
   });
 

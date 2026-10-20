@@ -11,6 +11,7 @@
  */
 
 import type { LanAddress } from './network.js';
+import { STAGE_HOST } from './startup.js';
 
 export interface BannerFacts {
   readonly port: number;
@@ -33,7 +34,7 @@ export function stageBanner(facts: BannerFacts): readonly string[] {
     LINE,
     '',
     '  Buehne auf diesem Bildschirm:',
-    `      http://localhost:${facts.port}/host/`,
+    `      http://${STAGE_HOST}:${facts.port}/host/`,
     '',
   ];
 
@@ -41,7 +42,7 @@ export function stageBanner(facts: BannerFacts): readonly string[] {
     out.push(
       '  Keine Adresse im lokalen Netz gefunden - ist das WLAN an?',
       '  Ohne sie kommt nur dieser Rechner an das Spiel heran:',
-      `      ${playUrl('localhost', facts.port)}`,
+      `      ${playUrl(STAGE_HOST, facts.port)}`,
       '',
     );
   } else {

@@ -1,3 +1,13 @@
+/**
+ * Nur Verdrahtung.
+ *
+ * Alles, was beim Hochfahren entschieden wird - Port, Bindung, Exit-Code,
+ * Browser-Adresse, vor oder nach dem `listening` -, steht in
+ * `runtime/startup.ts` und ist dort gebunden. Was hier steht, ist der
+ * Anschluss an den echten Prozess: echter Server, echte Konsole, echter
+ * Browser.
+ */
+
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
@@ -6,26 +16,10 @@ import { Server } from 'socket.io';
 import { makeRequestListener } from './http/requestListener.js';
 import { makeStaticHandler } from './http/static.js';
 import { stageBanner } from './runtime/banner.js';
-import { OPEN_FLAG, browserCommand, shouldOpenBrowser } from './runtime/browser.js';
+import { browserCommand } from './runtime/browser.js';
 import { lanAddresses } from './runtime/network.js';
-import { DEFAULT_PORT, decideAfterListenError, portSequence } from './runtime/ports.js';
+import { createRuntime } from './runtime/startup.js';
 import { attachGateway } from './transport/socketio/gateway.js';
-
-// Zusaetzliches Netz, kein Ersatz fuer die Behandlung an der Fehlerstelle:
-// ein uebersehener Pfad darf den Abend nicht beenden.
-process.on('uncaughtException', (error: unknown) => {
-  console.error('[quizbude] Unbehandelter Fehler - der Server laeuft weiter:', error);
-});
-process.on('unhandledRejection', (reason: unknown) => {
-  console.error('[quizbude] Unbehandelte Ablehnung - der Server laeuft weiter:', reason);
-});
-
-// Ein ausdruecklich gesetzter PORT ist eine Ansage, keine Vorliebe: dann
-// wird nicht ausgewichen. Ohne ihn sucht der Server sich einen freien.
-const rawPort = process.env['PORT'];
-const portWasChosenByUser = rawPort !== undefined && rawPort.trim() !== '';
-const sequence = portWasChosenByUser ? [Number(rawPort)] : portSequence();
-let port = sequence[0] ?? DEFAULT_PORT;
 
 const hostDir = fileURLToPath(new URL('../../../apps/host-web/dist', import.meta.url));
 const playerDir = fileURLToPath(new URL('../../../apps/player-web/dist', import.meta.url));
@@ -58,27 +52,26 @@ function openStage(url: string): void {
   }
 }
 
-// Das Netz oben faengt sonst auch einen Startfehler ab und der Prozess
-// endete still mit 0. Ein Server, der nicht hochkommt, muss das sagen.
-http.on('error', (error: unknown) => {
-  const code = (error as NodeJS.ErrnoException | null)?.code;
-  const decision = decideAfterListenError({ code, current: port, portWasChosenByUser, sequence });
-  if (decision.kind === 'retry') {
-    console.warn(`[quizbude] Port ${port} ist belegt - ich nehme ${decision.port}.`);
-    port = decision.port;
-    http.listen(port);
-    return;
-  }
-  console.error('[quizbude] Server kann nicht starten:', error);
-  console.error(`[quizbude] ${decision.reason}`);
-  process.exit(1);
+const runtime = createRuntime(http, {
+  env: process.env,
+  info: (line) => console.info(line),
+  warn: (line) => console.warn(line),
+  error: (line, detail) => {
+    // Ohne diese Unterscheidung steht hinter jeder Meldung ohne Anlass
+    // ein nacktes "undefined".
+    if (detail === undefined) console.error(line);
+    else console.error(line, detail);
+  },
+  exit: (code) => process.exit(code),
+  openStage,
+  banner: (port) =>
+    stageBanner({ port, addresses: lanAddresses(networkInterfaces()), rooms: registry.size }),
 });
 
-http.on('listening', () => {
-  for (const line of stageBanner({ port, addresses: lanAddresses(networkInterfaces()), rooms: registry.size })) {
-    console.info(line);
-  }
-  if (shouldOpenBrowser(process.env[OPEN_FLAG])) openStage(`http://localhost:${port}/host/`);
-});
+// Zusaetzliches Netz, kein Ersatz fuer die Behandlung an der Fehlerstelle.
+// Vor dem `listening` ist ein unbehandelter Wurf das Ende des Starts, danach
+// darf er den Abend nicht beenden - entschieden wird das in `startup.ts`.
+process.on('uncaughtException', (error: unknown) => runtime.onUncaught(error));
+process.on('unhandledRejection', (reason: unknown) => runtime.onUncaught(reason));
 
-http.listen(port);
+runtime.start();
