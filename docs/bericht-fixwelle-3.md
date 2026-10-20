@@ -183,7 +183,7 @@ Entwicklungsabhängigkeit ohnehin im Projekt (`typescript@^5.6.3`, Wurzel-`devDe
 - *`packages/core` bleibt rein.* Der Parser läuft im Test, der core **liest**. Er wird nicht von
   core geladen. `packages/core/src/index.ts` und jede Datei darunter importieren unverändert
   nichts außer `@quizbude/protocol` und relativen Pfaden — der Wächter selbst beweist das bei
-  jedem Lauf, jetzt über 16 statt 15 Dateien.
+  jedem Lauf, jetzt über 18 statt 17 Dateien.
 - *Keine neue Laufzeitabhängigkeit im Produktivpaket.* `typescript` steht in den
   `devDependencies` der Wurzel und wird ausschließlich von `test/quelltext.ts` importiert.
   `npm run build` bleibt Exit 0, die Bündelgrößen sind unverändert (61,57 / 61,82 kB gzip).

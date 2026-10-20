@@ -69,10 +69,17 @@ Neu aus der dritten Welle, bewusst nicht behoben:
 - **`MAX_NAME_CHARS = 16` ist ebenso undurchgesetzt, wie `MAX_PROMPT_CHARS` es war.** Die einzige Prüfung eines Spielernamens ist `isShortString` in `validate.ts:72`; die Konstante kommt im Quelltext nicht vor. Der Namensfilter der zweiten Welle ist der Moment, in dem das zählt — `parsePrompt` in `questions/load.ts` ist die Form, in der es zu lösen wäre.
 - **Die Uhr-, Zufalls- und Timerprüfung in `purity.test.ts` läuft weiterhin zeilenweise über eine Regex.** Ein über eine Zeilengrenze geschriebenes `Date` `.now()` liefe durch. Seit B2 liegt die parserbasierte Zerlegung daneben; dieselbe Prüfung ließe sich darauf stellen.
 - **`scope: 'all'` ist am echten Server ungebunden.** `room:answers_open` entsteht frühestens 13 s nach dem Start; sauber lösbar mit einer steuerbaren Uhr im Scheduler.
+- **N1 (niedrig): Der Aufruf von `loadQuestion` in `packages/server/src/demoQuiz.ts` ist von keinem Test gebunden.** Entfernt man ihn und lässt die Fragetexte legal, bleiben alle 118 Tests grün — die Zusicherungen binden getrennt, die Verdrahtung nicht. Die Wirkung ist heute null; spürbar wird die Lücke erst mit dem Quiz-Editor der zweiten Welle.
 
 Dazu: die Zeitleiste in `konzept-ux.md` Abschnitt 3 nennt jetzt T−13,0 bis T0 — das ist die Mindestdauer; eine lange Frage schiebt den Anfang weiter nach vorn.
 
-### 3. Zweite Welle, noch nicht begonnen
+### 3. Eigenständige Browser-Fassung
+
+Neben dem Durchstich liegt in `standalone/` eine eigenständige Browser-Fassung des Spiels: eine einzige Datei (`quizbude.html`), veröffentlicht als Artifact. Sie spielt mehrgerätig über die `room`-Laufzeitfähigkeit und hat einen netzfreien Ein-Gerät-Modus für den Fall, dass nur ein Bildschirm da ist. Was gebaut wurde und wie, steht in `standalone/bericht-standalone.md`.
+
+**Bekannte Grenze:** Wer abgemeldet ist oder die Seite über einen öffentlichen Link öffnet, kann sich laut Laufzeitvertrag nicht verbinden; Senderechte gelten erst ab Stufe Contributor. Gäste ohne Konto können also nicht mitspielen — für den Spieleabend mit Freunden ohne Konto bleibt der Ein-Gerät-Modus oder der Server aus dem Durchstich.
+
+### 4. Zweite Welle, noch nicht begonnen
 
 Nicht im Durchstich und bewusst weggelassen: Quiz-Editor · SQLite-Persistenz · Reconnect mit Sitzungstoken · Podium · Auswertungsseite · QR-Code · Spieler entfernen · Lobby sperren · Namensfilter · Audio · weitere Fragetypen.
 
