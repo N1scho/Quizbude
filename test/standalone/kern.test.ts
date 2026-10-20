@@ -4,7 +4,14 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { DEMO_TEXT, parseQuiz, pruefbericht } from '@quizbude/core';
 // @ts-expect-error - das Werkzeug ist bewusst reines JavaScript ohne Typen.
-import { ANFANG, ENDE, erzeugeBlock, lesBlock, SEITE } from '../../tools/standalone-parser.mjs';
+import {
+  ANFANG,
+  ENDE,
+  erzeugeBlock,
+  lesBlock,
+  schreibeBlock,
+  SEITE,
+} from '../../tools/standalone-parser.mjs';
 
 /**
  * Der Riegel gegen Auseinanderlaufen (Ruling 1a).
@@ -77,6 +84,18 @@ describe('Ein Parser, zwei Fassungen', () => {
     // Wird dieser Test rot, ist nichts kaputt - es fehlt ein Lauf:
     //   node tools/standalone-parser.mjs --schreiben
     expect(blockAusSeite()).toBe(erzeugeBlock() as string);
+  });
+
+  it('der Riegel haengt nicht an den Zeilenenden der Arbeitskopie', () => {
+    // Git schreibt die Seite auf Windows mit CRLF aus. Ein Riegel, der
+    // allein deshalb nach jedem frischen Klon rot ist, wird abgeschaltet -
+    // und dann faellt auch das Auseinanderlaufen nicht mehr auf.
+    const alsCrlf = seite().split('\n').join('\r\n').split('\r\r\n').join('\r\n');
+    expect(lesBlock(alsCrlf)).toBe(erzeugeBlock() as string);
+    // Und umgekehrt: ein Schreibvorgang laesst die Zeilenenden, wie sie sind.
+    const geschrieben = schreibeBlock(alsCrlf, erzeugeBlock()) as string;
+    expect(geschrieben.includes('\r\n')).toBe(true);
+    expect(lesBlock(geschrieben)).toBe(erzeugeBlock() as string);
   });
 
   it('die Seite haelt keine zweite Fassung des Parsers', () => {

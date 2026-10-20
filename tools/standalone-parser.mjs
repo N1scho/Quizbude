@@ -19,6 +19,9 @@ import ts from 'typescript';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+const CRLF = String.fromCharCode(13, 10);
+const LF = String.fromCharCode(10);
+
 /** Die Seite ist eine Datei ohne Bauschritt. Der Pfad steht hier, nicht im Test. */
 export const SEITE = join(ROOT, 'standalone', 'quizbude.html');
 
@@ -128,12 +131,20 @@ export function erzeugeBlock() {
   return `${ANFANG}\n${erzeugeRumpf()}\n${ENDE}`;
 }
 
-/** Was heute in der Seite steht. `null`, wenn die Marker fehlen. */
+/**
+ * Was heute in der Seite steht, auf einfache Zeilenenden gebracht.
+ * `null`, wenn die Marker fehlen.
+ *
+ * Die Zeilenenden muessen hier heraus: Git schreibt die Seite auf Windows
+ * mit CRLF in den Arbeitsbaum, der Erzeuger liefert LF. Ohne diesen
+ * Schritt waere der Riegel nach jedem frischen Klon rot - und ein Riegel,
+ * der aus einem nichtigen Grund rot ist, wird abgeschaltet.
+ */
 export function lesBlock(html) {
   const von = html.indexOf(ANFANG);
   const bis = html.indexOf(ENDE);
   if (von < 0 || bis < 0 || bis < von) return null;
-  return html.slice(von, bis + ENDE.length);
+  return html.slice(von, bis + ENDE.length).split(CRLF).join(LF);
 }
 
 export function schreibeBlock(html, block) {
@@ -142,7 +153,9 @@ export function schreibeBlock(html, block) {
   if (von < 0 || bis < 0 || bis < von) {
     throw new Error('In der Seite fehlen die Marker KERN ANFANG / KERN ENDE.');
   }
-  return html.slice(0, von) + block + html.slice(bis + ENDE.length);
+  // Der Block uebernimmt die Zeilenenden der Seite, nicht umgekehrt.
+  const passend = html.includes(CRLF) ? block.split(LF).join(CRLF) : block;
+  return html.slice(0, von) + passend + html.slice(bis + ENDE.length);
 }
 
 function main() {

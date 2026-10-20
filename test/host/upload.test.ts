@@ -43,6 +43,32 @@ describe('Pruefbericht der Buehne', () => {
     expect(markup).not.toContain('Alles in Ordnung');
   });
 
+  it('entschaerft auch eine Meldung, die selbst Markup enthaelt', () => {
+    // Heute baut der Kern jede Meldung aus eigenen Worten und Zahlen, nie
+    // aus dem Text des Nutzers. Diese Probe bindet trotzdem die Komponente
+    // und nicht diese Eigenschaft: aendert sich die Eigenschaft einmal -
+    // etwa weil eine Meldung die beanstandete Zeile zitiert -, soll das
+    // Markup trotzdem Text bleiben.
+    const markup = html(
+      createElement(Bericht, {
+        bericht: {
+          ok: false,
+          titel: 'Runde',
+          fragenzahl: 1,
+          dauerMs: 1000,
+          dauerText: BOESE,
+          fehler: [{ zeile: 3, text: BOESE }],
+          hinweise: [BOESE],
+          quelle: 'zeilen',
+        },
+      }),
+    );
+    expect(markup).not.toContain('<img');
+    expect(markup).not.toContain('<script>');
+    expect(markup).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(markup).toContain('Zeile 3: ');
+  });
+
   it('entschaerft Fremdeingabe in Titel und Meldung', () => {
     // Der ganze Weg: boeser Text -> Parser -> Bericht -> Markup.
     const text = `# ${BOESE}\n\n${BOESE}? | 20\n* ${BOESE}\n* B`;
