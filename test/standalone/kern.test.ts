@@ -93,8 +93,11 @@ describe('Ein Parser, zwei Fassungen', () => {
     const alsCrlf = seite().split('\n').join('\r\n').split('\r\r\n').join('\r\n');
     expect(lesBlock(alsCrlf)).toBe(erzeugeBlock() as string);
     // Und umgekehrt: ein Schreibvorgang laesst die Zeilenenden, wie sie sind.
+    // Gebunden wird das daran, dass in der ganzen Datei danach kein
+    // einzelnes LF mehr steckt - sonst bliebe die Probe gruen, waehrend
+    // der eingesetzte Block mit LF in einer CRLF-Datei liegt.
     const geschrieben = schreibeBlock(alsCrlf, erzeugeBlock()) as string;
-    expect(geschrieben.includes('\r\n')).toBe(true);
+    expect(geschrieben.split('\r\n').join('').includes('\n')).toBe(false);
     expect(lesBlock(geschrieben)).toBe(erzeugeBlock() as string);
   });
 
