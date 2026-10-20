@@ -4,12 +4,12 @@
 
 ## Wo wir stehen
 
-Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen.
+Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, **Ein-Klick-Start gebaut**.
 
 **Selbst nachgemessen am Ende des Tages** (nicht aus Berichten übernommen):
 
 ```
-npm test        118 Tests, 15 Dateien, grün, Exit 0
+npm test        150 Tests, 19 Dateien, grün, Exit 0
 npx tsc         Exit 0  (strict: true aus tsconfig.base.json)
 npm run build   Exit 0  (Spielergerät: kritischer Pfad 63,45 kB gzip)
 Arbeitsbaum     sauber
@@ -71,6 +71,13 @@ Neu aus der dritten Welle, bewusst nicht behoben:
 - **`scope: 'all'` ist am echten Server ungebunden.** `room:answers_open` entsteht frühestens 13 s nach dem Start; sauber lösbar mit einer steuerbaren Uhr im Scheduler.
 - **N1 (niedrig): Der Aufruf von `loadQuestion` in `packages/server/src/demoQuiz.ts` ist von keinem Test gebunden.** Entfernt man ihn und lässt die Fragetexte legal, bleiben alle 118 Tests grün — die Zusicherungen binden getrennt, die Verdrahtung nicht. Die Wirkung ist heute null; spürbar wird die Lücke erst mit dem Quiz-Editor der zweiten Welle.
 
+Neu aus dem Ein-Klick-Start, bewusst nicht behoben:
+
+- **QR-Code auf der Bühne.** Gehört zur zweiten Welle und war ausdrücklich nicht im Paket. Mit der jetzt gewählten Adresse ist es ein kleiner Schritt.
+- **Öffentliche IPv4 wird nicht angeboten.** Kandidaten sind nur die privaten Bereiche. Ein Rechner mit öffentlicher IPv4 direkt am Anschluss bekäme keinen Vorschlag.
+- **`::` und `0.0.0.0` teilen sich unter Windows denselben Port.** Hält ein fremdes Programm die 3000 auf `0.0.0.0`, bindet die Quizbude die 3000 auf `::` ohne auszuweichen — ein Handy über IPv4 landet dann womöglich beim fremden Programm. Einzelheiten in `bericht-einklickstart.md`.
+- **Der Fall „alle elf Ports belegt"** ist als Test gebunden, am Gerät aber nicht nachgestellt.
+
 Dazu: die Zeitleiste in `konzept-ux.md` Abschnitt 3 nennt jetzt T−13,0 bis T0 — das ist die Mindestdauer; eine lange Frage schiebt den Anfang weiter nach vorn.
 
 ### 3. Eigenständige Browser-Fassung
@@ -86,6 +93,20 @@ Nicht im Durchstich und bewusst weggelassen: Quiz-Editor · SQLite-Persistenz ·
 Folgeaufgaben aus Review und Fix-Wellen stehen in `review-durchstich.md`, `bericht-fixwelle.md`, `nachreview-fixwelle.md`, `bericht-fixwelle-2.md`, `nachreview-fixwelle-2.md` und `bericht-fixwelle-3.md`.
 
 ## Starten
+
+### Der normale Weg: doppelklicken
+
+**`quizbude-starten.cmd`** im Projektordner doppelklicken. Mehr ist nicht zu tun.
+
+Die Datei prüft Node, holt beim ersten Mal die Bausteine, baut nur, wenn sich etwas geändert hat, startet den Server und öffnet die Bühne im Standardbrowser. Das Fenster bleibt offen, solange der Server läuft; zum Beenden schließt man es.
+
+Was dabei auf dem Bildschirm steht, ist die Adresse für die Gäste — nicht `localhost`, das zeigt auf ihr eigenes Telefon, sondern die Adresse dieses Rechners im WLAN. Der wahrscheinlichste Kandidat steht groß, die übrigen darunter als Alternativen, jeweils mit dem Namen der Netzwerkkarte. Liegt die Vermutung daneben, nimmt man die nächste Zeile.
+
+**Beim allerersten Start fragt Windows, ob Node im Netzwerk annehmen darf.** Erlauben — und den Haken bei **„Privat"** setzen. Wird das weggeklickt oder nur „Öffentlich" erlaubt, kommt kein Handy durch, und es sieht aus wie ein Programmfehler.
+
+Ist Port 3000 belegt, nimmt der Server den nächsten freien bis 3010 und sagt, welchen. Wer `PORT` von Hand setzt, bekommt kein Ausweichen: dann gilt genau dieser Port, und ist er belegt, endet der Start mit Exit-Code 1.
+
+### Der zweite Weg: über die Kommandozeile
 
 ```
 cd C:\Users\nikol\quiz
@@ -132,3 +153,4 @@ Zum echten Testen drei Fenster: eins als Bühne, zwei als Spieler — eins davon
 | `bericht-fixwelle-2.md` | Zweite Welle: NR1–NR3 und die beiden Nutzerentscheidungen |
 | `nachreview-fixwelle-2.md` | Nachreview der zweiten Welle: fünf Befunde, zwei Wächter mit getauschten Lücken |
 | `bericht-fixwelle-3.md` | Dritte Welle: B1–B5, E1 am Verhalten, Importprüfung am Parser |
+| `bericht-einklickstart.md` | Ein-Klick-Start: Doppelklick, WLAN-Adresse, Portausweichen, 18 Rücknahmeproben |
