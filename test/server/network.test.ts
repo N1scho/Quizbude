@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lanAddresses, type Interfaces } from '../../packages/server/src/runtime/network.js';
+import { isWeakGuess, lanAddresses, type Interfaces } from '../../packages/server/src/runtime/network.js';
 
 /**
  * Der Pruefstein ist der echte Rechner, auf dem gespielt wird. Dort liegen
@@ -79,7 +79,7 @@ const ECHTER_RECHNER: Interfaces = {
 describe('Die Adresse fuer die Gaeste', () => {
   it('nennt auf dem echten Rechner die Netzwerkkarte zuerst', () => {
     const gefunden = lanAddresses(ECHTER_RECHNER);
-    expect(gefunden[0]).toEqual({ iface: 'Ethernet 6', address: '192.168.0.160' });
+    expect(gefunden[0]).toEqual({ iface: 'Ethernet 6', address: '192.168.0.160', score: 2 });
   });
 
   it('wirft APIPA, interne Adressen und alles ausserhalb der privaten Bereiche weg', () => {
@@ -241,6 +241,51 @@ describe('Die Adresse fuer die Gaeste', () => {
       ],
     };
     expect(lanAddresses(eigenesTor).map((a) => a.address)).toEqual(['192.168.9.77', '192.168.5.1']);
+  });
+
+  /**
+   * Die Bewertung wird mitgegeben, nicht weggeworfen. Ein Rechner, auf dem
+   * nur der Hyper-V-Standardschalter uebrig ist, bekommt einen deutlich
+   * negativen Wert - daran erkennt die Ausgabe, dass sie raten muss.
+   */
+  it('gibt die Bewertung mit, damit die Ausgabe eine Vermutung als solche nennen kann', () => {
+    const nurSchalter: Interfaces = {
+      'vEthernet (Default Switch)': [
+        {
+          address: '172.28.112.1',
+          netmask: '255.255.240.0',
+          family: 'IPv4',
+          mac: '00:15:5d:01:02:03',
+          internal: false,
+        },
+      ],
+    };
+    const gefunden = lanAddresses(nurSchalter);
+    expect(gefunden).toEqual([
+      { iface: 'vEthernet (Default Switch)', address: '172.28.112.1', score: -16 },
+    ]);
+    expect(gefunden.map(isWeakGuess)).toEqual([true]);
+  });
+
+  it('haelt eine echte Karte nicht fuer eine Vermutung', () => {
+    expect(lanAddresses(ECHTER_RECHNER).map(isWeakGuess)[0]).toBe(false);
+  });
+
+  /**
+   * Der Riegel auf die Familie, einzeln gebunden.
+   *
+   * Der Test mit `fe80::1` bindet ihn nicht: diese Adresse hat keine vier
+   * punktgetrennten Zahlen und faellt schon am Zahlenformat heraus. Hier
+   * steht deshalb eine Adresse, die das Zahlenformat erfuellt und trotzdem
+   * nicht als IPv4 gemeldet wird - nur der Familienriegel haelt sie auf.
+   */
+  it('nimmt nur, was die Karte selbst als IPv4 meldet', () => {
+    const falscheFamilie: Interfaces = {
+      WLAN: [
+        { address: '192.168.1.5', netmask: '255.255.255.0', family: 'IPv6', mac: '2c:f0:5d:97:fd:70', internal: false },
+      ],
+    };
+    expect(lanAddresses(falscheFamilie)).toEqual([]);
   });
 
   it('kommt mit gar keiner Karte zurecht', () => {

@@ -3,8 +3,13 @@ import { stageBanner } from '../../packages/server/src/runtime/banner.js';
 import type { LanAddress } from '../../packages/server/src/runtime/network.js';
 
 const ADRESSEN: readonly LanAddress[] = [
-  { iface: 'Ethernet 6', address: '192.168.0.160' },
-  { iface: 'Ethernet 4', address: '192.168.56.1' },
+  { iface: 'Ethernet 6', address: '192.168.0.160', score: 2 },
+  { iface: 'Ethernet 4', address: '192.168.56.1', score: -9 },
+];
+
+/** Ein Rechner mit nur dem Hyper-V-Standardschalter: -14, sonst nichts. */
+const NUR_VIRTUELL: readonly LanAddress[] = [
+  { iface: 'vEthernet (Default Switch)', address: '172.28.112.1', score: -14 },
 ];
 
 const text = (zeilen: readonly string[]): string => zeilen.join('\n');
@@ -46,6 +51,28 @@ describe('Die Startmeldung', () => {
     expect(t).not.toContain('/play/\n      (Netzwerkkarte');
   });
 
+  /**
+   * Der Fall, in dem die Heuristik nichts Besseres hat als eine Karte,
+   * die sie selbst fuer virtuell haelt. Frueher stand sie da wie eine
+   * echte Adresse - ohne Vorbehalt, ohne Alternative, ohne Hinweis auf
+   * das WLAN. Ein Mensch konnte hier nicht einmal selbst waehlen.
+   */
+  it('sagt einen schwach bewerteten Kandidaten als Vermutung an, nicht als Tatsache', () => {
+    const t = text(stageBanner({ port: 3000, addresses: NUR_VIRTUELL, rooms: 0 }));
+    expect(t).toContain('http://172.28.112.1:3000/play/');
+    expect(t).toContain('Wahrscheinlich');
+    expect(t).toContain('virtuell');
+    expect(t).toContain('WLAN');
+    expect(t).not.toContain('Das tippen die Gaeste in ihr Handy:');
+  });
+
+  it('bleibt bei einem gut bewerteten Kandidaten bei der klaren Ansage', () => {
+    const t = text(stageBanner({ port: 3000, addresses: ADRESSEN, rooms: 0 }));
+    expect(t).toContain('Das tippen die Gaeste in ihr Handy:');
+    expect(t).not.toContain('Wahrscheinlich');
+    expect(t).not.toContain('virtuell');
+  });
+
   it('spricht die Firewall an, bevor sie als Programmfehler durchgeht', () => {
     const t = text(stageBanner({ port: 3000, addresses: ADRESSEN, rooms: 0 }));
     expect(t).toContain('Firewall');
@@ -56,5 +83,7 @@ describe('Die Startmeldung', () => {
     const t = text(stageBanner({ port: 3000, addresses: ADRESSEN, rooms: 2 }));
     const fremd = [...t].filter((z) => z.charCodeAt(0) > 126);
     expect(fremd).toEqual([]);
+    const v = text(stageBanner({ port: 3000, addresses: NUR_VIRTUELL, rooms: 2 }));
+    expect([...v].filter((z) => z.charCodeAt(0) > 126)).toEqual([]);
   });
 });

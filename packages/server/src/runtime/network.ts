@@ -32,6 +32,25 @@ export type Interfaces = Readonly<Record<string, readonly InterfaceEntry[] | und
 export interface LanAddress {
   readonly iface: string;
   readonly address: string;
+  /**
+   * Wie sehr die Heuristik an diese Adresse glaubt. Negativ heisst: die
+   * Karte traegt mehr Merkmale einer virtuellen als einer echten. Die
+   * Bewertung wird mitgegeben, damit die Ausgabe sie zeigen kann -
+   * frueher endete sie hier und niemand erfuhr davon.
+   */
+  readonly score: number;
+}
+
+/**
+ * Unterhalb dieser Grenze ist der Kandidat eine Vermutung, keine Ansage.
+ * Ein echtes Heimnetz in 172.16/12 kommt auf 0 und bleibt damit knapp
+ * ueber der Grenze; der Hyper-V-Standardschalter kommt auf -14.
+ */
+export const WEAK_BELOW = 0;
+
+/** Haelt die Heuristik diesen Kandidaten selbst fuer unwahrscheinlich? */
+export function isWeakGuess(address: LanAddress): boolean {
+  return address.score < WEAK_BELOW;
 }
 
 /** Namen, die eine virtuelle Karte oder einen Tunnel ankuendigen. */
@@ -178,5 +197,5 @@ export function lanAddresses(interfaces: Interfaces): LanAddress[] {
     if (x.iface !== y.iface) return x.iface < y.iface ? -1 : 1;
     return x.address < y.address ? -1 : x.address > y.address ? 1 : 0;
   });
-  return found.map(({ iface, address }) => ({ iface, address }));
+  return found.map(({ iface, address, score }) => ({ iface, address, score }));
 }
