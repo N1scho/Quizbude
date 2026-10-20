@@ -1,0 +1,146 @@
+import { describe, expect, it } from 'vitest';
+import { createDefaultRegistry, parseQuiz, pruefbericht, readingWindowMs, schaetzeDauerMs } from '@quizbude/core';
+import { loadUploadedQuiz } from '../packages/server/src/uploadedQuiz.js';
+import { parseClientMessage } from '../packages/server/src/transport/socketio/validate.js';
+
+const zeig = (name: string, text: string): void => {
+  const e = parseQuiz(text);
+  // eslint-disable-next-line no-console
+  console.log(
+    `\n### ${name}\n  ok=${e.ok} quelle=${e.quelle} titel=${JSON.stringify(e.titel)} n=${e.questions.length}` +
+      `\n  fehler=${JSON.stringify(e.fehler)}` +
+      `\n  hinweise=${JSON.stringify(e.hinweise)}` +
+      `\n  questions=${JSON.stringify(e.questions)}`,
+  );
+};
+
+describe('Probe', () => {
+  it('KI-Ausgaben', () => {
+    zeig(
+      'Vorwort + Zaun + Nummerierung + A) + fett im Fragetext + Haekchen',
+      [
+        'Klar! Hier sind deine Fragen:',
+        '',
+        '```markdown',
+        '# Abendrunde',
+        '',
+        '1. Welcher **Planet** ist der Sonne am nächsten? | 20',
+        'A) ✅ Merkur',
+        'B) Venus',
+        '',
+        '2. Stimmt das? | 15',
+        '* Wahr',
+        'Falsch',
+        '```',
+        '',
+        'Viel Spaß!',
+      ].join('\n'),
+    );
+
+    zeig(
+      'mehrzeiliges Vorwort',
+      [
+        'Hier sind deine Fragen:',
+        'Ich habe auf eine gute Mischung geachtet.',
+        '',
+        'Frage eins? | 20',
+        '* A',
+        'B',
+      ].join('\n'),
+    );
+
+    zeig('zwei Leerzeilen zwischen Bloecken', 'F1? | 20\n* A\nB\n\n\nF2? | 20\n* C\nD');
+    zeig('ohne abschliessenden Zeilenumbruch', 'F1? | 20\n* A\nB');
+    zeig('gemischte Zeilenenden', 'F1? | 20\r\n* A\rB\n\r\nF2? | 20\r\n* C\nD');
+    zeig('typografische Anfuehrung mitten im Wort', 'Wer schrieb „Faust“? | 20\n* Goethe\nSchiller');
+    zeig('Gedankenstrich und NBSP', 'Was – bitte – ist das? | 20\n* A\nB');
+    zeig('Frage ohne Erklaerung', 'F1? | 20\n* A\nB');
+    zeig('JSON im Code-Zaun', '```json\n{"titel":"T","fragen":[{"frage":"F?","antworten":["*A","B"]}]}\n```');
+    zeig(
+      'JSON im Code-Zaun mit Vorwort',
+      'Hier ist das JSON:\n\n```json\n{"titel":"T","fragen":[{"frage":"F?","antworten":["*A","B"]}]}\n```',
+    );
+    zeig('JSON mit nachgestelltem Komma', '{"fragen":[{"frage":"F?","antworten":["*A","B"]},]}');
+    zeig('Fluchtweg', 'F? | 20\n\\* Stern\n* Richtig');
+    zeig('genau 200 Zeichen', `${'A'.repeat(199)}? | 20\n* A\nB`);
+    zeig('201 Zeichen', `${'A'.repeat(200)}? | 20\n* A\nB`);
+    zeig('genau zwei Antworten', 'F? | 20\n* A\nB');
+    zeig('fuenf Antworten', 'F? | 20\n* A\nB\nC\nD\nE');
+    zeig('4 Sekunden', 'F? | 4\n* A\nB');
+    zeig('301 Sekunden', 'F? | 301\n* A\nB');
+    zeig('Zeilennummer hinter Vorwort und Zaun', [
+      'Hier sind deine Fragen:',
+      '',
+      '```text',
+      'F1? | 20',
+      '* A',
+      '* B',
+      '```',
+      '',
+      'Viel Spass',
+    ].join('\n'));
+    expect(true).toBe(true);
+  });
+
+  it('Titel laenger als 256 Zeichen: Buehne gruen, Transportrand verwirft', () => {
+    const text = `# ${'T'.repeat(300)}\n\nF? | 20\n* A\nB`;
+    const erg = parseQuiz(text);
+    const bericht = pruefbericht(erg);
+    console.log(`\n### Titel 300\n  bericht.ok=${bericht.ok} titelLaenge=${erg.titel.length}`);
+    const nutzlast = { t: 'host:create', quiz: { title: erg.titel, questions: erg.questions } };
+    console.log(`  parseClientMessage=${JSON.stringify(parseClientMessage(nutzlast))}`);
+    expect(bericht.ok).toBe(true);
+    expect(parseClientMessage(nutzlast)).toBeNull();
+  });
+
+  it('Dauerschaetzung zwei Beispiele', () => {
+    const erg = parseQuiz('Welcher Planet ist der Sonne am nächsten? | 20\n* Merkur\nVenus\nMars\nJupiter');
+    const q = erg.questions[0]!;
+    console.log(
+      `\n### Dauer 1\n  prompt=${JSON.stringify(q.prompt)} woerter=${q.prompt.trim().split(/\s+/u).length}` +
+        `\n  lesefenster=${readingWindowMs(q.prompt, ['Merkur', 'Venus', 'Mars', 'Jupiter'])}` +
+        `\n  gesamt=${schaetzeDauerMs(erg.questions)} text=${pruefbericht(erg).dauerText}`,
+    );
+    const erg2 = parseQuiz('Ja? | 5\n* Wahr\nFalsch\n\nNein? | 300\n* Wahr\nFalsch');
+    console.log(
+      `\n### Dauer 2\n  lesefenster0=${readingWindowMs(erg2.questions[0]!.prompt, ['Wahr', 'Falsch'])}` +
+        ` lesefenster1=${readingWindowMs(erg2.questions[1]!.prompt, ['Wahr', 'Falsch'])}` +
+        `\n  gesamt=${schaetzeDauerMs(erg2.questions)} text=${pruefbericht(erg2).dauerText}`,
+    );
+    expect(true).toBe(true);
+  });
+
+  it('Nutzlastgroesse an der 1-MB-Grenze', () => {
+    const block = (i: number): string =>
+      `Frage Nummer ${i} mit etwas Text damit es realistisch wird? | 20\n* Antwort A\nAntwort B\nAntwort C\nAntwort D\n> ${'E'.repeat(4200)}`;
+    const text = Array.from({ length: 200 }, (_v, i) => block(i)).join('\n\n');
+    const bytes = new TextEncoder().encode(text).length;
+    const erg = parseQuiz(text);
+    const nutzlast = { t: 'host:create', quiz: { title: erg.titel, questions: erg.questions } };
+    const draht = JSON.stringify(nutzlast).length;
+    console.log(`\n### Groesse\n  datei=${bytes} B ok=${erg.ok} n=${erg.questions.length} draht=${draht} B`);
+    const registry = createDefaultRegistry();
+    const t0 = Date.now();
+    const quiz = loadUploadedQuiz({ title: erg.titel, questions: erg.questions }, registry);
+    console.log(`  loadUploadedQuiz: ${Date.now() - t0} ms, ${quiz.questions.length} Fragen`);
+    expect(true).toBe(true);
+  });
+
+  it('timeLimitMs ohne Obergrenze am Rand', () => {
+    const registry = createDefaultRegistry();
+    const q = {
+      id: 'q1',
+      type: 'single_choice',
+      prompt: 'F?',
+      timeLimitMs: Number.MAX_SAFE_INTEGER,
+      pointsFactor: 1e308,
+      spec: { options: [{ label: 'A' }, { label: 'B' }], correctIndex: 0, explanation: 'X'.repeat(500000) },
+    };
+    const geladen = loadUploadedQuiz({ title: 'x', questions: [q] }, registry);
+    console.log(
+      `\n### Rand\n  timeLimitMs=${geladen.questions[0]?.timeLimitMs} pointsFactor=${geladen.questions[0]?.pointsFactor}` +
+        ` explanationLaenge=${(geladen.questions[0]?.spec as { explanation: string }).explanation.length}`,
+    );
+    expect(true).toBe(true);
+  });
+});

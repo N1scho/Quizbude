@@ -1,0 +1,142 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { parseQuiz } from '@quizbude/core';
+import { startHarness, type Harness } from './server/harness.js';
+
+let harness: Harness | null = null;
+afterEach(async () => {
+  if (harness !== null) {
+    await harness.close();
+    harness = null;
+  }
+});
+
+const schlaf = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+describe('Probe Transportrand', () => {
+  it('Titel ueber 256 Zeichen: keine Antwort, kein room:error', async () => {
+    const h = await startHarness();
+    harness = h;
+    const host = await h.client();
+    const erg = parseQuiz(`# ${'T'.repeat(300)}\n\nF? | 20\n* A\nB`);
+    host.sendRaw({ t: 'host:create', quiz: { title: erg.titel, questions: erg.questions } });
+    let antwort = 'KEINE';
+    try {
+      await host.await('room:created', 800);
+      antwort = 'room:created';
+    } catch {
+      try {
+        await host.await('room:error', 100);
+        antwort = 'room:error';
+      } catch {
+        antwort = 'KEINE';
+      }
+    }
+    console.log(`\n### Titel 300 am Draht: Antwort=${antwort} verbunden=${host.socket.connected} raeume=${h.registry.size}`);
+    expect(antwort).toBe('KEINE');
+  });
+
+  it('Spielergeraet darf host:create schicken', async () => {
+    const h = await startHarness();
+    harness = h;
+    const host = await h.client();
+    host.sendRaw({ t: 'host:create' });
+    const raum = await host.await('room:created');
+    const spieler = await h.client();
+    spieler.sendRaw({ t: 'player:join', roomCode: raum.roomCode, displayName: 'Mallory' });
+    await host.await('room:roster');
+    const vorher = h.registry.byCode(raum.roomCode)?.state.players.size;
+
+    // Dasselbe Geraet macht sich selbst zum Gastgeber einer eigenen Runde.
+    const erg = parseQuiz('# Mallorys Runde\n\nF? | 20\n* A\nB');
+    spieler.sendRaw({ t: 'host:create', quiz: { title: erg.titel, questions: erg.questions } });
+    const eigen = await spieler.await('room:created');
+    console.log(
+      `\n### Spieler als Gastgeber: eigenerRaum=${eigen.roomCode} titel=${eigen.quizTitle} raeume=${h.registry.size}`,
+    );
+
+    // Und verschwindet dann. Erfaehrt der alte Raum davon?
+    spieler.close();
+    await schlaf(500);
+    const nachher = h.registry.byCode(raum.roomCode)?.state.players;
+    const verbunden = nachher === undefined ? [] : [...nachher.values()].map((p: { connected?: boolean; displayName?: string }) => `${String(p.displayName)}:${String(p.connected)}`);
+    console.log(`  alter Raum vorher=${String(vorher)} nachher=${String(nachher?.size)} zustand=${verbunden.join(',')}`);
+    expect(h.registry.size).toBe(2);
+  });
+
+  it('Raeume haeufen sich unbegrenzt an', async () => {
+    const h = await startHarness();
+    harness = h;
+    const client = await h.client();
+    const erg = parseQuiz('# R\n\nF? | 20\n* A\nB');
+    const t0 = Date.now();
+    for (let i = 0; i < 300; i += 1) {
+      client.sendRaw({ t: 'host:create', quiz: { title: erg.titel, questions: erg.questions } });
+    }
+    await schlaf(800);
+    console.log(
+      `\n### 300x host:create von EINEM Socket: raeume=${h.registry.size} in ${Date.now() - t0} ms, Speicher=${Math.round(process.memoryUsage().heapUsed / 1e6)} MB`,
+    );
+    expect(h.registry.size).toBeGreaterThan(1);
+  });
+
+  it('Antwortzeit ohne Obergrenze am Rand', async () => {
+    const h = await startHarness();
+    harness = h;
+    const host = await h.client();
+    host.sendRaw({
+      t: 'host:create',
+      quiz: {
+        title: 'Lang',
+        questions: [
+          {
+            id: 'q1',
+            type: 'single_choice',
+            prompt: 'F?',
+            timeLimitMs: Number.MAX_SAFE_INTEGER,
+            pointsFactor: 1,
+            spec: { options: [{ label: 'A' }, { label: 'B' }], correctIndex: 0, explanation: null },
+          },
+        ],
+      },
+    });
+    const raum = await host.await('room:created');
+    console.log(`\n### Antwortzeit 9e15 ms angenommen: ${raum.roomCode} / ${raum.questionCount} Frage(n)`);
+    const spieler = await h.client();
+    spieler.sendRaw({ t: 'player:join', roomCode: raum.roomCode, displayName: 'Anna' });
+    await host.await('room:roster');
+    host.sendRaw({ t: 'host:start', expectedPhase: 'LOBBY' });
+    const t0 = process.cpuUsage();
+    await schlaf(2000);
+    const verbraucht = process.cpuUsage(t0);
+    console.log(
+      `  CPU in 2 s Wartezeit: user=${Math.round(verbraucht.user / 1000)} ms sys=${Math.round(verbraucht.system / 1000)} ms`,
+    );
+    expect(true).toBe(true);
+  });
+
+  it('Nutzlast ueber 1 MB am Draht', async () => {
+    const h = await startHarness();
+    harness = h;
+    const host = await h.client();
+    const block = (i: number): string =>
+      `Frage ${i}? | 20\n* A\nB\n> ${'E'.repeat(4900)}`;
+    const text = Array.from({ length: 200 }, (_v, i) => block(i)).join('\n\n');
+    const bytes = new TextEncoder().encode(text).length;
+    const erg = parseQuiz(text);
+    const nutzlast = { t: 'host:create', quiz: { title: erg.titel, questions: erg.questions } };
+    console.log(
+      `\n### Grosse Datei: datei=${bytes} B (<= 1 000 000 erlaubt), ok=${erg.ok}, draht=${JSON.stringify(nutzlast).length} B`,
+    );
+    host.sendRaw(nutzlast);
+    let antwort = 'KEINE';
+    try {
+      await host.await('room:created', 1500);
+      antwort = 'room:created';
+    } catch {
+      antwort = 'KEINE';
+    }
+    await schlaf(200);
+    console.log(`  Antwort=${antwort} verbunden=${host.socket.connected} raeume=${h.registry.size}`);
+    expect(true).toBe(true);
+  });
+});
