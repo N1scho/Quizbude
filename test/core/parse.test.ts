@@ -1,0 +1,373 @@
+import { describe, expect, it } from 'vitest';
+import {
+  ANNOUNCE_MS,
+  DEMO_TEXT,
+  MAX_OPTION_CHARS,
+  MAX_PROMPT_CHARS,
+  MAX_QUESTIONS,
+  ESTIMATE_REVEAL_MS,
+  ESTIMATE_SCOREBOARD_MS,
+  createDefaultRegistry,
+  dauerText,
+  dekodiereUtf8,
+  escapeHtml,
+  loadQuestion,
+  parseQuiz,
+  pruefbericht,
+  readingWindowMs,
+  schaetzeDauerMs,
+  siehtNachJsonAus,
+  type ParsedSingleChoiceSpec,
+  type ParsedTrueFalseSpec,
+} from '@quizbude/core';
+
+/**
+ * Der Autor einer Fragendatei ist ein Sprachmodell. Die Tests teilen sich
+ * danach in zwei Haelften: was stillschweigend verdaut wird (Beiwerk des
+ * Werkzeugs) und was laut auffaellt (Inhalt des Autors).
+ */
+
+function meldungen(text: string): string[] {
+  return parseQuiz(text).fehler.map((f) => `Zeile ${f.zeile}: ${f.text}`);
+}
+
+const EINFACH = ['Welcher Planet ist der Sonne am naechsten? | 20', '* Merkur', 'Venus'].join('\n');
+
+describe('Zeilenformat: der Normalfall', () => {
+  it('liest die Demorunde', () => {
+    const erg = parseQuiz(DEMO_TEXT);
+    expect(erg.fehler).toEqual([]);
+    expect(erg.ok).toBe(true);
+    expect(erg.titel).toBe('Quizbude — Demorunde');
+    expect(erg.questions).toHaveLength(2);
+    expect(erg.questions[0]?.type).toBe('single_choice');
+    expect(erg.questions[0]?.timeLimitMs).toBe(20_000);
+    expect(erg.questions[1]?.type).toBe('true_false');
+    expect((erg.questions[1]?.spec as ParsedTrueFalseSpec).correct).toBe(true);
+  });
+
+  it('gibt Fragen heraus, die der Kern danach ohne Murren laedt', () => {
+    // Die Tuer, durch die jede Quelle muss (questions/load.ts). Ein Parser,
+    // der etwas herausgibt, das `loadQuestion` ablehnt, ist kaputt - und
+    // das faellt sonst erst im Spiel auf.
+    const registry = createDefaultRegistry();
+    const erg = parseQuiz(DEMO_TEXT);
+    for (const q of erg.questions) {
+      expect(() => loadQuestion(q, registry)).not.toThrow();
+    }
+  });
+
+  it('nimmt ohne Zahl hinter dem Strich 20 Sekunden', () => {
+    expect(parseQuiz(EINFACH.replace(' | 20', '')).questions[0]?.timeLimitMs).toBe(20_000);
+  });
+
+  it('nimmt die Erklaerung mit', () => {
+    const erg = parseQuiz(`${EINFACH}\n> Weil er innen liegt.`);
+    expect((erg.questions[0]?.spec as ParsedSingleChoiceSpec).explanation).toBe(
+      'Weil er innen liegt.',
+    );
+  });
+});
+
+describe('Beiwerk des Werkzeugs wird stillschweigend verdaut', () => {
+  it('Code-Zaeune, auch mit Sprachangabe', () => {
+    const erg = parseQuiz('```text\n' + EINFACH + '\n```\n');
+    expect(erg.fehler).toEqual([]);
+    expect(erg.questions).toHaveLength(1);
+  });
+
+  it('ein Vorwort der KI', () => {
+    const erg = parseQuiz(`Hier sind deine 2 Fragen:\n\n${EINFACH}\n\nWas ist 2+2? | 10\n* 4\n5`);
+    expect(erg.fehler).toEqual([]);
+    expect(erg.questions).toHaveLength(2);
+    expect(erg.hinweise.join(' ')).toContain('Vorwort');
+  });
+
+  it('ein Schlusswort der KI', () => {
+    const erg = parseQuiz(`${EINFACH}\n\nWas ist 2+2? | 10\n* 4\n5\n\nViel Spass beim Quiz`);
+    expect(erg.fehler).toEqual([]);
+    expect(erg.questions).toHaveLength(2);
+    expect(erg.hinweise.join(' ')).toContain('Schlusswort');
+  });
+
+  it('Nummerierung vor der Frage', () => {
+    const erg = parseQuiz('1. Welcher Planet ist der Sonne am naechsten? | 20\n* Merkur\nVenus');
+    expect(erg.fehler).toEqual([]);
+    expect(erg.questions[0]?.prompt).toBe('Welcher Planet ist der Sonne am naechsten?');
+  });
+
+  it('Beschriftungen A) a) vor den Antworten', () => {
+    const erg = parseQuiz('Frage? | 20\n* A) Merkur\nb) Venus\nC. Mars');
+    expect(erg.fehler).toEqual([]);
+    const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+    expect(spec.options.map((o) => o.label)).toEqual(['Merkur', 'Venus', 'Mars']);
+  });
+
+  it('Fettschrift und Kursivschrift', () => {
+    const erg = parseQuiz('**Welcher Planet?** | 20\n* **Merkur**\n*Venus*\n`Mars`');
+    expect(erg.fehler).toEqual([]);
+    expect(erg.questions[0]?.prompt).toBe('Welcher Planet?');
+    const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+    expect(spec.options.map((o) => o.label)).toEqual(['Merkur', 'Venus', 'Mars']);
+    expect(spec.correctIndex).toBe(0);
+  });
+
+  it('Haekchen und Kreuzkasten statt Stern', () => {
+    for (const marke of ['✅', '✔', '[x]', '[X]', '+']) {
+      const erg = parseQuiz(`Frage? | 20\n${marke} Merkur\nVenus`);
+      expect(erg.fehler, marke).toEqual([]);
+      expect((erg.questions[0]?.spec as ParsedSingleChoiceSpec).correctIndex, marke).toBe(0);
+    }
+  });
+
+  it('ein leerer Kasten markiert nicht', () => {
+    const erg = parseQuiz('Frage? | 20\n[x] Merkur\n[ ] Venus');
+    expect(erg.fehler).toEqual([]);
+    const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+    expect(spec.correctIndex).toBe(0);
+    expect(spec.options.map((o) => o.label)).toEqual(['Merkur', 'Venus']);
+  });
+
+  it('typografische Anfuehrungszeichen um eine Antwort', () => {
+    const erg = parseQuiz('Frage? | 20\n* „Wahr“\n„Falsch“');
+    expect(erg.fehler).toEqual([]);
+    expect(erg.questions[0]?.type).toBe('true_false');
+  });
+
+  it('BOM, CRLF, geschuetzte Leerzeichen und Leerzeilen am Rand', () => {
+    const roh = `﻿\r\n\r\nFrage? | 20\r\n* Merkur\r\nVenus\r\n\r\n`;
+    const erg = parseQuiz(roh);
+    expect(erg.fehler).toEqual([]);
+    expect(erg.questions[0]?.prompt).toBe('Frage?');
+  });
+});
+
+describe('Inhaltsfehler werden laut, mit Zeilennummer', () => {
+  it('zwei markierte Antworten - die Meldung aus dem Auftrag', () => {
+    const text = ['Frage? | 20', '* Merkur', '* Venus'].join('\n');
+    expect(meldungen(text)).toEqual([
+      'Zeile 3: 2 Antworten markiert, genau eine darf es sein.',
+    ]);
+  });
+
+  it('keine markierte Antwort', () => {
+    const text = ['Frage? | 20', 'Merkur', 'Venus'].join('\n');
+    expect(meldungen(text)).toEqual([
+      'Zeile 1: keine Antwort markiert, genau eine muss es sein. Setz ein * vor die richtige.',
+    ]);
+  });
+
+  it('Fragetext ueber 200 Zeichen', () => {
+    const lang = `${'A'.repeat(MAX_PROMPT_CHARS + 7)}?`;
+    const meldung = meldungen(`${lang} | 20\n* Merkur\nVenus`)[0] ?? '';
+    expect(meldung).toContain('Zeile 1:');
+    expect(meldung).toContain(`${MAX_PROMPT_CHARS + 8} Zeichen`);
+    expect(meldung).toContain(`erlaubt sind ${MAX_PROMPT_CHARS}`);
+  });
+
+  it('Antwort ueber 100 Zeichen - an der Zeile der Antwort', () => {
+    const meldung = meldungen(`Frage? | 20\n* Merkur\n${'B'.repeat(MAX_OPTION_CHARS + 1)}`)[0] ?? '';
+    expect(meldung).toContain('Zeile 3:');
+    expect(meldung).toContain(`erlaubt sind ${MAX_OPTION_CHARS}`);
+  });
+
+  it('weniger als zwei Antworten', () => {
+    expect(meldungen('Frage? | 20\n* Merkur')[0]).toContain('nur eine Antwort');
+  });
+
+  it('mehr als vier Antworten', () => {
+    const text = ['Frage? | 20', '* A', 'B', 'C', 'D', 'E'].join('\n');
+    expect(meldungen(text)[0]).toContain('5 Antworten, erlaubt sind zwei bis vier');
+  });
+
+  it('Antwortzeit ausserhalb 5 bis 300 Sekunden', () => {
+    expect(meldungen('Frage? | 4\n* A\nB')[0]).toContain('Erlaubt sind 5 bis 300');
+    expect(meldungen('Frage? | 301\n* A\nB')[0]).toContain('Erlaubt sind 5 bis 300');
+    expect(parseQuiz('Frage? | 5\n* A\nB').fehler).toEqual([]);
+    expect(parseQuiz('Frage? | 300\n* A\nB').fehler).toEqual([]);
+  });
+
+  it('eine leere Antwortzeile', () => {
+    expect(meldungen('Frage? | 20\n*\nVenus')[0]).toBe('Zeile 2: Diese Antwort ist leer.');
+  });
+
+  it('nummeriert die Zeilen der Originaldatei, auch hinter einem Code-Zaun', () => {
+    // Wuerden die Zaunzeilen einfach entfernt, zeigte jede Meldung
+    // danach auf die falsche Zeile - und der Nutzer sucht umsonst.
+    const text = ['```', 'Frage? | 20', '* Merkur', '* Venus', '```'].join('\n');
+    expect(meldungen(text)).toEqual(['Zeile 4: 2 Antworten markiert, genau eine darf es sein.']);
+  });
+
+  it('mehr als 200 Fragen', () => {
+    const block = 'Frage? | 20\n* A\nB';
+    const viele = Array.from({ length: MAX_QUESTIONS + 1 }, () => block).join('\n\n');
+    expect(meldungen(viele)[0]).toContain(`Mehr als ${MAX_QUESTIONS}`);
+  });
+
+  it('leerer Text', () => {
+    expect(meldungen('   \n\n  ')[0]).toContain('noch keine Frage');
+  });
+});
+
+describe('Fluchtweg fuer das Markierungszeichen (Ruling 4a)', () => {
+  it('\\* macht aus dem Stern Text statt Markierung', () => {
+    const erg = parseQuiz('Frage? | 20\n* Merkur\n\\* Venus');
+    expect(erg.fehler).toEqual([]);
+    const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+    expect(spec.options.map((o) => o.label)).toEqual(['Merkur', '* Venus']);
+    expect(spec.correctIndex).toBe(0);
+  });
+
+  it('die richtige Antwort darf selbst mit einem Stern beginnen', () => {
+    const erg = parseQuiz('Frage? | 20\n*\\* Merkur\nVenus');
+    expect(erg.fehler).toEqual([]);
+    const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+    expect(spec.options.map((o) => o.label)).toEqual(['* Merkur', 'Venus']);
+    expect(spec.correctIndex).toBe(0);
+  });
+});
+
+describe('JSON wird zusaetzlich erkannt (Ruling 3)', () => {
+  it('erkennt JSON ohne Zutun des Nutzers', () => {
+    expect(siehtNachJsonAus('{"fragen":[]}')).toBe(true);
+    expect(siehtNachJsonAus('Frage? | 20')).toBe(false);
+  });
+
+  it('liest deutsche Feldnamen', () => {
+    const erg = parseQuiz(
+      JSON.stringify({
+        titel: 'Abendrunde',
+        fragen: [
+          {
+            frage: 'Welcher Planet?',
+            antworten: ['Merkur', 'Venus'],
+            richtig: 0,
+            sekunden: 25,
+            erklaerung: 'Innen.',
+          },
+        ],
+      }),
+    );
+    expect(erg.fehler).toEqual([]);
+    expect(erg.quelle).toBe('json');
+    expect(erg.titel).toBe('Abendrunde');
+    expect(erg.questions[0]?.timeLimitMs).toBe(25_000);
+    expect((erg.questions[0]?.spec as ParsedSingleChoiceSpec).correctIndex).toBe(0);
+  });
+
+  it('liest englische Feldnamen und Antwortobjekte', () => {
+    const erg = parseQuiz(
+      JSON.stringify({
+        title: 'Evening',
+        questions: [
+          {
+            question: 'Which planet?',
+            answers: [
+              { text: 'Mercury', correct: true },
+              { text: 'Venus', correct: false },
+            ],
+            timeLimitMs: 15_000,
+          },
+        ],
+      }),
+    );
+    expect(erg.fehler).toEqual([]);
+    expect(erg.questions[0]?.timeLimitMs).toBe(15_000);
+    expect((erg.questions[0]?.spec as ParsedSingleChoiceSpec).correctIndex).toBe(0);
+  });
+
+  it('eine blanke Liste ist auch JSON', () => {
+    const erg = parseQuiz(JSON.stringify([{ frage: 'F?', antworten: ['*A', 'B'] }]));
+    expect(erg.fehler).toEqual([]);
+    expect(erg.questions).toHaveLength(1);
+  });
+
+  it('haelt die Inhaltsgrenzen auch im JSON', () => {
+    const erg = parseQuiz(
+      JSON.stringify({ fragen: [{ frage: 'F?', antworten: ['A', 'B'] }] }),
+    );
+    expect(erg.ok).toBe(false);
+    expect(erg.fehler[0]?.text).toContain('keine Antwort markiert');
+  });
+
+  it('kaputtes JSON wird nicht als Zeilenformat verbogen', () => {
+    const erg = parseQuiz('{ "fragen": [ ');
+    expect(erg.ok).toBe(false);
+    expect(erg.quelle).toBe('json');
+    expect(erg.fehler[0]?.text).toContain('laesst sich aber nicht lesen');
+  });
+});
+
+describe('Pruefbericht (Ruling 2)', () => {
+  it('rechnet die Spieldauer aus den Zeiten des Kerns', () => {
+    const erg = parseQuiz(DEMO_TEXT);
+    const q0 = erg.questions[0];
+    const q1 = erg.questions[1];
+    if (q0 === undefined || q1 === undefined) throw new Error('Demorunde fehlt');
+    const erwartet =
+      ANNOUNCE_MS +
+      readingWindowMs(q0.prompt, ['Merkur', 'Venus', 'Mars', 'Jupiter']) +
+      q0.timeLimitMs +
+      ESTIMATE_REVEAL_MS +
+      ESTIMATE_SCOREBOARD_MS +
+      ANNOUNCE_MS +
+      readingWindowMs(q1.prompt, ['Wahr', 'Falsch']) +
+      q1.timeLimitMs +
+      ESTIMATE_REVEAL_MS;
+    expect(schaetzeDauerMs(erg.questions)).toBe(erwartet);
+  });
+
+  it('nennt Titel, Fragenzahl und Dauer', () => {
+    const bericht = pruefbericht(parseQuiz(DEMO_TEXT));
+    expect(bericht.ok).toBe(true);
+    expect(bericht.titel).toBe('Quizbude — Demorunde');
+    expect(bericht.fragenzahl).toBe(2);
+    expect(bericht.dauerMs).toBeGreaterThan(0);
+    expect(bericht.dauerText).toMatch(/^etwa \d+ (Sekunden|Minuten)$/u);
+  });
+
+  it('formuliert die Dauer ohne falsche Genauigkeit', () => {
+    expect(dauerText(42_000)).toBe('etwa 42 Sekunden');
+    expect(dauerText(600_000)).toBe('etwa 10 Minuten');
+  });
+});
+
+describe('Kodierung', () => {
+  it('nimmt UTF-8 an', () => {
+    const bytes = new TextEncoder().encode('Frage? | 20\n* Ä\nÖ');
+    const erg = dekodiereUtf8(bytes);
+    expect(erg.ok).toBe(true);
+    if (erg.ok) expect(erg.text).toContain('Ä');
+  });
+
+  it('lehnt eine Datei ab, die erkennbar kein UTF-8 ist, und sagt was zu tun ist', () => {
+    // Latin-1: Ä ist 0xC4, danach ein gewoehnlicher Buchstabe. Als UTF-8
+    // gelesen ist das eine ungueltige Folge.
+    const erg = dekodiereUtf8(new Uint8Array([0xc4, 0x6e, 0x64, 0x65, 0x72, 0x6e]));
+    expect(erg.ok).toBe(false);
+    if (!erg.ok) {
+      expect(erg.meldung).toContain('nicht UTF-8');
+      expect(erg.meldung).toContain('UTF-8');
+    }
+  });
+
+  it('lehnt eine zu grosse Datei mit verstaendlicher Meldung ab', () => {
+    const erg = dekodiereUtf8(new Uint8Array(1_000_001));
+    expect(erg.ok).toBe(false);
+    if (!erg.ok) expect(erg.meldung).toContain('kB');
+  });
+});
+
+describe('Escaping (Sicherheitsnaht)', () => {
+  it('entschaerft jedes gefaehrliche Zeichen', () => {
+    expect(escapeHtml(`<script>alert("x")</script>&'`)).toBe(
+      '&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;&amp;&#39;',
+    );
+  });
+
+  it('der Parser reicht spitze Klammern unveraendert durch - entschaerft wird erst bei der Ausgabe', () => {
+    const erg = parseQuiz('<img src=x onerror=alert(1)>? | 20\n* "A" <b>\nB');
+    expect(erg.fehler).toEqual([]);
+    expect(erg.questions[0]?.prompt).toBe('<img src=x onerror=alert(1)>?');
+  });
+});

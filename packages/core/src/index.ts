@@ -5,6 +5,7 @@ export * from './scoring/score.js';
 export * from './questions/handler.js';
 export * from './questions/registry.js';
 export * from './questions/load.js';
+export * from './questions/parse.js';
 export * from './questions/singleChoice.js';
 export * from './questions/trueFalse.js';
 export * from './reward/layer.js';
