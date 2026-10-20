@@ -24,21 +24,29 @@ const FORBIDDEN: readonly { readonly pattern: RegExp; readonly why: string }[] =
 
 /**
  * Jede Importform, nicht nur `from '...'`: beide Anfuehrungszeichen,
- * Seiteneffekt-Importe, dynamische Importe und require.
+ * Seiteneffekt-Importe, dynamische Importe und require - und jede davon
+ * auch dann, wenn der Spezifizierer auf einer anderen Zeile steht als sein
+ * Schluesselwort. `\s*` im Muster deckt den Umbruch mit ab, sobald das
+ * Muster ueber der ganzen Datei laeuft statt Zeile fuer Zeile (NR3).
  */
 const SPECIFIER_RE = /(?:\bfrom\s*|\bimport\s*|\brequire\s*)\(?\s*['"]([^'"]+)['"]/g;
 
+/**
+ * Kommentare raus, Zeilenstruktur bleibt stehen: ein Kommentar darf einen
+ * Import nennen, ohne einer zu sein.
+ */
+function ohneKommentare(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+}
+
 export function specifiersOf(source: string): string[] {
+  const code = ohneKommentare(source);
   const out: string[] = [];
-  for (const line of source.split('\n')) {
-    // Kommentarzeilen duerfen Importe nennen, ohne welche zu sein.
-    const code = line.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, '');
-    SPECIFIER_RE.lastIndex = 0;
-    let m: RegExpExecArray | null = SPECIFIER_RE.exec(code);
-    while (m !== null) {
-      out.push(m[1] as string);
-      m = SPECIFIER_RE.exec(code);
-    }
+  SPECIFIER_RE.lastIndex = 0;
+  let m: RegExpExecArray | null = SPECIFIER_RE.exec(code);
+  while (m !== null) {
+    out.push(m[1] as string);
+    m = SPECIFIER_RE.exec(code);
   }
   return out;
 }
@@ -94,6 +102,17 @@ describe('Purity von core', () => {
     ]);
     expect(specifiersOf(`const fs = require("node:fs");`)).toEqual(['node:fs']);
     expect(specifiersOf(`// import 'node:crypto';`)).toEqual([]);
+
+    // NR3: Ein Umbruch zwischen Schluesselwort und Spezifizierer ist eine
+    // Schreibweise wie jede andere. Zeilenweise Erkennung lief hier durch.
+    expect(specifiersOf('export const load = () => import(\n  "node:crypto"\n);')).toEqual([
+      'node:crypto',
+    ]);
+    expect(specifiersOf('import {\n  randomUUID,\n} from\n  "node:crypto";')).toEqual([
+      'node:crypto',
+    ]);
+    // Auch der mehrzeilige Blockkommentar bleibt ein Kommentar.
+    expect(specifiersOf("/*\n * import 'node:crypto';\n */")).toEqual([]);
   });
 
   it('die Importpruefung findet in core ueberhaupt Importe', () => {
