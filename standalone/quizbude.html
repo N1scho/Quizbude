@@ -102,6 +102,17 @@ input[type=text]:focus,textarea:focus{border-color:var(--sonne);outline:none}
 .hinweis{color:var(--gedaempft);font-size:15px}
 .fehler{color:var(--sonne);font-size:16px}
 .fehler ul{margin:.3em 0;padding-left:1.1em}
+.ablage{border:2px dashed var(--linie);border-radius:var(--r-gross);padding:26px;text-align:center;margin:16px 0;transition:border-color .15s var(--ein),background .15s var(--ein)}
+.ablage.bereit{border-color:var(--sonne);background:rgba(255,201,77,.10)}
+.ablage p{margin:0 0 .5em}
+.anweisung{white-space:pre-wrap;font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;font-size:13px;line-height:1.5;background:var(--buehne);border:1px solid var(--linie);border-radius:var(--r-mittel);padding:14px;max-height:240px;overflow:auto;margin:0 0 12px;user-select:all}
+.knopfreihe{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center}
+.bericht dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0 0 10px;align-items:baseline}
+.bericht dt{color:var(--gedaempft);font-size:14px;text-transform:uppercase;letter-spacing:.02em}
+.bericht dd{margin:0}
+.bericht .gut{color:var(--mint);margin:0}
+.bericht ul{margin:.3em 0 0;padding-left:1.1em;color:var(--sonne)}
+.bericht li{margin-bottom:.3em}
 
 /* ---------- Startseite ---------- */
 #s-start{gap:22px}
@@ -331,20 +342,40 @@ input[type=text]:focus,textarea:focus{border-color:var(--sonne);outline:none}
     <p class="hinweis" id="startfuss">Nichts wird gespeichert, nichts verschickt. Schließt die Seite, ist die Runde vorbei.</p>
   </section>
 
-  <!-- ====================== Fragen-Editor ====================== -->
+  <!-- ====================== Fragen laden ====================== -->
   <section id="s-editor" class="screen scrollt" hidden>
     <h1 style="font-size:30px;margin-bottom:6px">Eigene Fragen</h1>
-    <p class="hinweis" style="max-width:62ch">
-      Eine Frage je Block, Blöcke durch eine Leerzeile getrennt. Erste Zeile ist die Frage,
-      darunter zwei bis vier Antworten. Ein <b>*</b> markiert die richtige. <b>| 20</b> hinter der
-      Frage setzt die Antwortzeit in Sekunden, <b>&gt;</b> eine Erklärung.
-      Heißen die beiden Antworten <b>Wahr</b> und <b>Falsch</b>, wird daraus eine Wahr/Falsch-Frage.
+    <p class="hinweis" style="max-width:66ch">
+      Lass dir die Fragen von deiner KI schreiben. Die Datei legst du hier ab — oder du
+      kippst den Text einfach ins Feld. Geprüft wird, bevor irgendetwas startet.
     </p>
-    <label for="editorfeld">Fragen</label>
+
+    <div class="karte" style="margin-top:16px">
+      <h2 style="font-size:22px;margin-bottom:6px">Anweisung für deine KI</h2>
+      <p class="hinweis">Kopier den Block, leg ihn deiner KI vor, und was zurückkommt, landet hier.</p>
+      <pre id="ki-anweisung" class="anweisung" tabindex="0"></pre>
+      <div class="knopfreihe" style="margin-top:0">
+        <button class="knopf still" id="btn-anweisung-kopieren" type="button">Anweisung kopieren</button>
+        <span id="kopierstand" class="hinweis" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+
+    <div id="ablage" class="ablage">
+      <p><b>Datei hierher ziehen</b></p>
+      <p class="hinweis">Textdatei oder JSON, als UTF-8 gespeichert. Höchstens 1 MB.</p>
+      <button class="knopf still" id="btn-datei" type="button">Datei auswählen</button>
+      <input type="file" id="dateifeld" accept=".txt,.md,.json,text/plain,text/markdown,application/json" hidden>
+    </div>
+
+    <label for="editorfeld">… oder Text einfügen</label>
     <textarea id="editorfeld" spellcheck="false" autocomplete="off"></textarea>
-    <div id="editormeldung" class="fehler" style="margin-top:12px"></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
-      <button class="knopf haupt" id="btn-editor-uebernehmen" type="button">Übernehmen</button>
+    <div id="editormeldung" class="fehler" role="status" aria-live="polite" style="margin-top:12px"></div>
+    <div id="pruefbericht" class="karte bericht" style="margin-top:14px" hidden></div>
+
+    <div class="knopfreihe">
+      <button class="knopf haupt" id="btn-editor-pruefen" type="button">Fragen prüfen</button>
+      <button class="knopf" id="btn-editor-buehne" type="button" hidden>Bühne eröffnen</button>
+      <button class="knopf still" id="btn-editor-uebernehmen" type="button" hidden>Übernehmen</button>
       <button class="knopf still" id="btn-editor-demo" type="button">Demorunde zurückholen</button>
       <button class="knopf still" id="btn-editor-zurueck" type="button">Zurück</button>
     </div>
@@ -477,20 +508,746 @@ input[type=text]:focus,textarea:focus{border-color:var(--sonne);outline:none}
    ranking.ts, rng.ts). Zahlen und Formeln sind von dort übernommen.
    ========================================================================= */
 
-/* ---------- Konstanten (engine/constants.ts) ---------- */
+/* === KERN ANFANG - erzeugt aus packages/core/src, nicht von Hand aendern === */
+const Kern = (function () {
+  'use strict';
 const ANNOUNCE_MS = 3000;
 const LATE_GRACE_MS = 1500;
 const ALL_ANSWERED_SETTLE_MS = 300;
 const PLAYER_SOFT_WARN = 25;
-
+const PLAYER_HARD_CAP = 5000;
 const READING_BASE_MS = 1500;
 const READING_PER_PROMPT_WORD_MS = 400;
 const READING_PER_OPTION_WORD_MS = 150;
-const READING_MIN_MS = 10000;          /* keine Obergrenze */
-
+const READING_MIN_MS = 10000;
 const MAX_PROMPT_CHARS = 200;
 const MAX_OPTION_CHARS = 100;
 const MAX_NAME_CHARS = 16;
+function countWords(text) {
+    const trimmed = text.trim();
+    if (trimmed.length === 0)
+        return 0;
+    return trimmed.split(/\s+/u).length;
+}
+function readingWindowMs(prompt, optionLabels) {
+    const promptWords = countWords(prompt);
+    const optionWords = optionLabels.reduce((sum, label) => sum + countWords(label), 0);
+    const raw = READING_BASE_MS +
+        READING_PER_PROMPT_WORD_MS * promptWords +
+        READING_PER_OPTION_WORD_MS * optionWords;
+    return Math.max(Math.round(raw), READING_MIN_MS);
+}
+const MIN_ANSWER_SECONDS = 5;
+const MAX_ANSWER_SECONDS = 300;
+const DEFAULT_ANSWER_SECONDS = 20;
+const MAX_QUESTIONS = 200;
+const MAX_UPLOAD_BYTES = 1000000;
+const ESTIMATE_REVEAL_MS = 8000;
+const ESTIMATE_SCOREBOARD_MS = 7000;
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (c) => {
+        if (c === '&')
+            return '&amp;';
+        if (c === '<')
+            return '&lt;';
+        if (c === '>')
+            return '&gt;';
+        if (c === '"')
+            return '&quot;';
+        return '&#39;';
+    });
+}
+function isRecord(value) {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+function normalisiereText(raw) {
+    return String(raw)
+        .replace(/^﻿/, '')
+        .replace(/\r\n?/g, '\n')
+        .replace(/[   ]/g, ' ');
+}
+function geradeAnfuehrung(value) {
+    return value
+        .replace(/[“”„‟«»]/g, '"')
+        .replace(/[‘’‚‛]/g, "'");
+}
+function entferneAuszeichnung(value) {
+    let out = value;
+    for (let runde = 0; runde < 3; runde += 1) {
+        out = out
+            .replace(/\*\*([^*]+)\*\*/g, '$1')
+            .replace(/__([^_]+)__/g, '$1')
+            .replace(/`([^`]+)`/g, '$1');
+    }
+    const kursiv = /^\*([^*]+)\*$/.exec(out.trim());
+    if (kursiv !== null && kursiv[1] !== undefined)
+        out = kursiv[1];
+    const unterstrich = /^_([^_]+)_$/.exec(out.trim());
+    if (unterstrich !== null && unterstrich[1] !== undefined)
+        out = unterstrich[1];
+    return out;
+}
+function entpackeAnfuehrung(value) {
+    const t = value.trim();
+    const paare = [
+        ['"', '"'],
+        ["'", "'"],
+        ['“', '”'],
+        ['„', '“'],
+        ['„', '”'],
+        ['«', '»'],
+        ['‘', '’'],
+    ];
+    for (const paar of paare) {
+        const auf = paar[0];
+        const zu = paar[1];
+        if (t.length >= auf.length + zu.length + 1 && t.startsWith(auf) && t.endsWith(zu)) {
+            return t.slice(auf.length, t.length - zu.length).trim();
+        }
+    }
+    return t;
+}
+function dauerText(ms) {
+    const sekunden = Math.max(0, Math.round(ms / 1000));
+    if (sekunden < 90)
+        return `etwa ${sekunden} Sekunden`;
+    const minuten = Math.round(sekunden / 60);
+    return `etwa ${minuten} Minuten`;
+}
+function labelsVon(frage) {
+    if (frage.type === 'true_false')
+        return ['Wahr', 'Falsch'];
+    const spec = frage.spec;
+    return spec.options.map((o) => o.label);
+}
+function schaetzeDauerMs(questions) {
+    let summe = 0;
+    for (let i = 0; i < questions.length; i += 1) {
+        const q = questions[i];
+        if (q === undefined)
+            continue;
+        summe += ANNOUNCE_MS;
+        summe += readingWindowMs(q.prompt, labelsVon(q));
+        summe += q.timeLimitMs;
+        summe += ESTIMATE_REVEAL_MS;
+        if (i < questions.length - 1)
+            summe += ESTIMATE_SCOREBOARD_MS;
+    }
+    return summe;
+}
+function pruefbericht(erg) {
+    const dauerMs = schaetzeDauerMs(erg.questions);
+    return {
+        ok: erg.ok,
+        titel: erg.titel,
+        fragenzahl: erg.questions.length,
+        dauerMs,
+        dauerText: dauerText(dauerMs),
+        fehler: erg.fehler,
+        hinweise: erg.hinweise,
+        quelle: erg.quelle,
+    };
+}
+function dekodiereUtf8(bytes) {
+    if (bytes.length > MAX_UPLOAD_BYTES) {
+        return {
+            ok: false,
+            meldung: `Die Datei ist ${Math.round(bytes.length / 1024)} kB gross. ` +
+                `Mehr als ${Math.round(MAX_UPLOAD_BYTES / 1024)} kB nimmt die Seite nicht an. ` +
+                'Teil die Fragen auf mehrere Dateien auf.',
+        };
+    }
+    try {
+        const decoder = new TextDecoder('utf-8', { fatal: true });
+        return { ok: true, text: decoder.decode(bytes) };
+    }
+    catch {
+        return {
+            ok: false,
+            meldung: 'Die Datei ist nicht UTF-8 kodiert. Speicher sie noch einmal als ' +
+                '"UTF-8" (im Editor unter "Speichern unter" oder "Kodierung") und ' +
+                'lad sie dann erneut hoch.',
+        };
+    }
+}
+const KI_ANWEISUNG = [
+    'Schreib mir Quizfragen in genau diesem Format:',
+    '',
+    '# Titel der Runde',
+    '',
+    'Welcher Planet ist der Sonne am naechsten? | 20',
+    '* Merkur',
+    'Venus',
+    'Mars',
+    'Jupiter',
+    '> Merkur umkreist die Sonne in 58 Millionen Kilometern Abstand.',
+    '',
+    'Ein Oktopus hat drei Herzen. | 15',
+    '* Wahr',
+    'Falsch',
+    '',
+    'Regeln:',
+    '- Jede Frage ist ein Block. Blöcke werden durch eine Leerzeile getrennt.',
+    '- Erste Zeile des Blocks ist die Frage, höchstens 200 Zeichen.',
+    '- Darunter zwei bis vier Antworten, je höchstens 100 Zeichen.',
+    '- Genau eine Antwort beginnt mit einem Stern (*). Nur eine.',
+    '- Die Zahl hinter dem senkrechten Strich (|) ist die Antwortzeit in',
+    '  Sekunden, erlaubt sind 5 bis 300. Ohne Angabe gilt 20.',
+    '- Eine Zeile mit > ist eine optionale Erklärung zur Frage.',
+    '- Heißen die beiden Antworten "Wahr" und "Falsch", wird daraus',
+    '  automatisch eine Wahr/Falsch-Frage.',
+    '- Soll eine Antwort selbst mit einem Stern beginnen, schreib einen',
+    '  umgekehrten Schrägstrich davor: \\* so geht das.',
+    '',
+    'Wichtig:',
+    '- Keine Nummerierung der Fragen.',
+    '- Keine Überschriften außer der einen Titelzeile mit #.',
+    '- Kein Code-Block, keine Backticks.',
+    '- Kein Vorwort und kein Schlusswort, nur die Fragen.',
+].join('\n');
+const ZAUN = /^\s*(```|~~~)/;
+const MARKIERUNG = /^(\*|\+|✅|✔|✓|☑|\[\s*[xX]\s*\])\s*/;
+const LEERKASTEN = /^(\[\s*\]|☐|❌|✗)\s*/;
+const PUNKT = /^(-|–|•|·|●|■)\s+/;
+const BESCHRIFTUNG = /^([A-Za-z]|\d{1,2})[).:]\s+/;
+const NUMMERIERUNG = /^\d{1,3}[).]\s+/;
+function istMarkiert(zeile) {
+    if (zeile.startsWith('**'))
+        return false;
+    if (/^\*[^*]+\*$/.test(zeile))
+        return false;
+    if (LEERKASTEN.test(zeile))
+        return false;
+    return MARKIERUNG.test(zeile);
+}
+function fluchtweg(rest) {
+    if (!rest.startsWith('\\'))
+        return null;
+    return rest.slice(1);
+}
+function leseAntwort(zeile) {
+    const roh = zeile.text.trim();
+    const direkt = fluchtweg(roh);
+    if (direkt !== null) {
+        return { nr: zeile.nr, label: direkt.trim(), markiert: false };
+    }
+    let rest = roh;
+    let markiert = false;
+    if (istMarkiert(rest)) {
+        markiert = true;
+        rest = rest.replace(MARKIERUNG, '');
+        const entkommen = fluchtweg(rest);
+        if (entkommen !== null) {
+            return { nr: zeile.nr, label: entkommen.trim(), markiert: true };
+        }
+    }
+    else {
+        rest = rest.replace(LEERKASTEN, '').replace(PUNKT, '');
+    }
+    rest = rest.replace(BESCHRIFTUNG, '');
+    rest = entferneAuszeichnung(rest);
+    rest = entpackeAnfuehrung(rest);
+    return { nr: zeile.nr, label: rest.trim(), markiert };
+}
+const ZEIT = /\s*[|｜]\s*(\d{1,5})\s*(?:s|sek|sek\.|sekunden|sec)?\s*$/i;
+function leseFrage(text) {
+    let rest = text.trim().replace(NUMMERIERUNG, '');
+    let sekunden = DEFAULT_ANSWER_SECONDS;
+    let angegeben = false;
+    const treffer = ZEIT.exec(rest);
+    if (treffer !== null && treffer[1] !== undefined && treffer.index !== undefined) {
+        sekunden = Number.parseInt(treffer[1], 10);
+        angegeben = true;
+        rest = rest.slice(0, treffer.index).trim();
+    }
+    rest = entferneAuszeichnung(rest);
+    rest = entpackeAnfuehrung(rest);
+    return { prompt: rest.trim(), sekunden, angegeben };
+}
+function wirktWieFrage(text) {
+    const t = text.trim();
+    return t.endsWith('?') || ZEIT.test(t);
+}
+function zuBloecken(zeilen) {
+    const bloecke = [];
+    const fehler = [];
+    let titel = '';
+    let titelErlaubt = true;
+    let aktuell = null;
+    const schliessen = () => {
+        if (aktuell !== null)
+            bloecke.push(aktuell);
+        aktuell = null;
+    };
+    for (const zeile of zeilen) {
+        const text = zeile.text.trim();
+        if (text === '') {
+            schliessen();
+            continue;
+        }
+        if (titelErlaubt && text.startsWith('#')) {
+            const t = entferneAuszeichnung(text.replace(/^#+\s*/, '')).trim();
+            if (t !== '')
+                titel = t;
+            titelErlaubt = false;
+            continue;
+        }
+        if (aktuell === null) {
+            titelErlaubt = false;
+            if (text.startsWith('>')) {
+                fehler.push({
+                    zeile: zeile.nr,
+                    text: 'Eine Erklaerung mit > steht ueber keiner Frage. Setz sie unter die Frage, zu der sie gehoert.',
+                });
+                continue;
+            }
+            const gelesen = leseFrage(text);
+            aktuell = {
+                nr: zeile.nr,
+                promptRoh: gelesen.prompt,
+                sekunden: gelesen.sekunden,
+                sekundenAngegeben: gelesen.angegeben,
+                antworten: [],
+                erklaerung: null,
+                zeilen: 1,
+            };
+            continue;
+        }
+        if (text.startsWith('>')) {
+            const e = entferneAuszeichnung(text.replace(/^>+\s*/, '')).trim();
+            aktuell.erklaerung = aktuell.erklaerung === null ? e : `${aktuell.erklaerung} ${e}`;
+            continue;
+        }
+        aktuell.antworten.push(leseAntwort(zeile));
+    }
+    schliessen();
+    return { bloecke, titel, fehler };
+}
+function trenneBeiwerk(bloecke) {
+    const hinweise = [];
+    const rest = bloecke.slice();
+    const erste = rest[0];
+    if (rest.length > 1 &&
+        erste !== undefined &&
+        erste.antworten.length === 0 &&
+        !wirktWieFrage(erste.promptRoh)) {
+        hinweise.push(`Zeile ${erste.nr}: als Vorwort uebersprungen.`);
+        rest.shift();
+    }
+    const letzte = rest[rest.length - 1];
+    if (rest.length > 1 &&
+        letzte !== undefined &&
+        letzte.antworten.length === 0 &&
+        !wirktWieFrage(letzte.promptRoh)) {
+        hinweise.push(`Zeile ${letzte.nr}: als Schlusswort uebersprungen.`);
+        rest.pop();
+    }
+    return { bloecke: rest, hinweise };
+}
+function istWahrFalsch(labels) {
+    var _a, _b;
+    if (labels.length !== 2)
+        return false;
+    const a = ((_a = labels[0]) !== null && _a !== void 0 ? _a : '').toLocaleLowerCase('de');
+    const b = ((_b = labels[1]) !== null && _b !== void 0 ? _b : '').toLocaleLowerCase('de');
+    return a === 'wahr' && b === 'falsch';
+}
+function pruefeUndBaue(bloecke, fehler) {
+    const questions = [];
+    bloecke.forEach((b, idx) => {
+        const nr = idx + 1;
+        if (b.promptRoh.length === 0) {
+            fehler.push({ zeile: b.nr, text: 'Der Fragetext fehlt.' });
+        }
+        else if (b.promptRoh.length > MAX_PROMPT_CHARS) {
+            fehler.push({
+                zeile: b.nr,
+                text: `Der Fragetext hat ${b.promptRoh.length} Zeichen, erlaubt sind ${MAX_PROMPT_CHARS}. ` +
+                    `Kuerz ihn um ${b.promptRoh.length - MAX_PROMPT_CHARS} Zeichen.`,
+            });
+        }
+        if (b.sekunden < MIN_ANSWER_SECONDS || b.sekunden > MAX_ANSWER_SECONDS) {
+            fehler.push({
+                zeile: b.nr,
+                text: `Die Antwortzeit ist ${b.sekunden} Sekunden. Erlaubt sind ` +
+                    `${MIN_ANSWER_SECONDS} bis ${MAX_ANSWER_SECONDS} Sekunden.`,
+            });
+        }
+        if (b.antworten.length < 2) {
+            fehler.push({
+                zeile: b.nr,
+                text: `Diese Frage hat ${b.antworten.length === 0 ? 'keine' : 'nur eine'} Antwort. ` +
+                    'Es muessen zwei bis vier sein.',
+            });
+        }
+        else if (b.antworten.length > 4) {
+            fehler.push({
+                zeile: b.nr,
+                text: `Diese Frage hat ${b.antworten.length} Antworten, erlaubt sind zwei bis vier. ` +
+                    'Fehlt zwischen zwei Fragen vielleicht eine Leerzeile?',
+            });
+        }
+        for (const a of b.antworten) {
+            if (a.label.length === 0) {
+                fehler.push({ zeile: a.nr, text: 'Diese Antwort ist leer.' });
+            }
+            else if (a.label.length > MAX_OPTION_CHARS) {
+                fehler.push({
+                    zeile: a.nr,
+                    text: `Diese Antwort hat ${a.label.length} Zeichen, erlaubt sind ${MAX_OPTION_CHARS}. ` +
+                        `Kuerz sie um ${a.label.length - MAX_OPTION_CHARS} Zeichen.`,
+                });
+            }
+        }
+        const markierte = b.antworten.filter((a) => a.markiert);
+        if (markierte.length === 0) {
+            fehler.push({
+                zeile: b.nr,
+                text: 'keine Antwort markiert, genau eine muss es sein. Setz ein * vor die richtige.',
+            });
+        }
+        else if (markierte.length > 1) {
+            const zweite = markierte[1];
+            fehler.push({
+                zeile: zweite === undefined ? b.nr : zweite.nr,
+                text: `${markierte.length} Antworten markiert, genau eine darf es sein.`,
+            });
+        }
+        const labels = b.antworten.map((a) => a.label);
+        const richtigerIndex = markierte.length === 1 ? b.antworten.indexOf(markierte[0]) : 0;
+        const wahrFalsch = istWahrFalsch(labels);
+        questions.push({
+            id: `q${nr}`,
+            type: wahrFalsch ? 'true_false' : 'single_choice',
+            prompt: b.promptRoh,
+            timeLimitMs: b.sekunden * 1000,
+            pointsFactor: 1,
+            spec: wahrFalsch
+                ? { correct: richtigerIndex === 0, explanation: b.erklaerung }
+                : {
+                    options: labels.map((l) => ({ label: l })),
+                    correctIndex: richtigerIndex,
+                    explanation: b.erklaerung,
+                },
+        });
+    });
+    return questions;
+}
+function zeileFuer(zeilen, nadel) {
+    const gesucht = nadel.trim();
+    if (gesucht === '')
+        return 0;
+    for (const z of zeilen) {
+        if (z.text.includes(gesucht))
+            return z.nr;
+    }
+    return 0;
+}
+function erstesFeld(obj, namen) {
+    for (const name of namen) {
+        const wert = obj[name];
+        if (wert !== undefined && wert !== null)
+            return wert;
+    }
+    return undefined;
+}
+function jsonAntworten(roh) {
+    if (!Array.isArray(roh))
+        return null;
+    const out = [];
+    for (const eintrag of roh) {
+        if (typeof eintrag === 'string') {
+            const markiert = istMarkiert(eintrag.trim());
+            const text = markiert ? eintrag.trim().replace(MARKIERUNG, '') : eintrag;
+            out.push({ label: entpackeAnfuehrung(entferneAuszeichnung(text)).trim(), markiert });
+            continue;
+        }
+        if (isRecord(eintrag)) {
+            const label = erstesFeld(eintrag, ['label', 'text', 'antwort', 'answer', 'option']);
+            const markiert = erstesFeld(eintrag, ['correct', 'richtig', 'istRichtig', 'correctAnswer']);
+            out.push({
+                label: typeof label === 'string' ? entpackeAnfuehrung(entferneAuszeichnung(label)).trim() : '',
+                markiert: markiert === true,
+            });
+            continue;
+        }
+        out.push({ label: '', markiert: false });
+    }
+    return out;
+}
+function parseJson(text, zeilen) {
+    const fehler = [];
+    let daten;
+    try {
+        daten = JSON.parse(text);
+    }
+    catch {
+        try {
+            daten = JSON.parse(geradeAnfuehrung(text));
+        }
+        catch {
+            return {
+                ok: false,
+                titel: 'Quizbude',
+                questions: [],
+                hinweise: [],
+                quelle: 'json',
+                fehler: [
+                    {
+                        zeile: 0,
+                        text: 'Die Datei faengt wie JSON an, laesst sich aber nicht lesen. ' +
+                            'Entweder gueltiges JSON schicken oder das Zeilenformat benutzen.',
+                    },
+                ],
+            };
+        }
+    }
+    const wurzel = isRecord(daten) ? daten : null;
+    const rohFragen = Array.isArray(daten)
+        ? daten
+        : wurzel === null
+            ? null
+            : erstesFeld(wurzel, ['fragen', 'questions', 'items']);
+    if (!Array.isArray(rohFragen)) {
+        return {
+            ok: false,
+            titel: 'Quizbude',
+            questions: [],
+            hinweise: [],
+            quelle: 'json',
+            fehler: [
+                {
+                    zeile: 0,
+                    text: 'Im JSON fehlt die Liste der Fragen (Feld "fragen" oder "questions").',
+                },
+            ],
+        };
+    }
+    const titelRoh = wurzel === null ? undefined : erstesFeld(wurzel, ['titel', 'title', 'name']);
+    const titel = typeof titelRoh === 'string' && titelRoh.trim() !== '' ? titelRoh.trim() : 'Quizbude';
+    const bloecke = [];
+    rohFragen.forEach((roh, i) => {
+        if (!isRecord(roh)) {
+            fehler.push({ zeile: 0, text: `Eintrag ${i + 1} im JSON ist keine Frage.` });
+            return;
+        }
+        const promptRoh = erstesFeld(roh, ['frage', 'prompt', 'question', 'text']);
+        const prompt = typeof promptRoh === 'string' ? entferneAuszeichnung(promptRoh).trim() : '';
+        const nr = zeileFuer(zeilen, typeof promptRoh === 'string' ? promptRoh : '');
+        const antworten = jsonAntworten(erstesFeld(roh, ['antworten', 'answers', 'options', 'optionen']));
+        if (antworten === null) {
+            fehler.push({
+                zeile: nr,
+                text: `Frage ${i + 1} hat keine Antwortliste (Feld "antworten" oder "answers").`,
+            });
+            return;
+        }
+        const richtigRoh = erstesFeld(roh, ['richtig', 'correct', 'correctIndex', 'loesung', 'answer']);
+        if (typeof richtigRoh === 'number' && Number.isInteger(richtigRoh)) {
+            for (let k = 0; k < antworten.length; k += 1) {
+                const a = antworten[k];
+                if (a === undefined)
+                    continue;
+                antworten[k] = { label: a.label, markiert: k === richtigRoh };
+            }
+        }
+        else if (typeof richtigRoh === 'string') {
+            const gesucht = richtigRoh.trim().toLocaleLowerCase('de');
+            for (let k = 0; k < antworten.length; k += 1) {
+                const a = antworten[k];
+                if (a === undefined)
+                    continue;
+                antworten[k] = { label: a.label, markiert: a.label.toLocaleLowerCase('de') === gesucht };
+            }
+        }
+        const sekundenRoh = erstesFeld(roh, ['sekunden', 'seconds', 'zeit', 'timeLimit']);
+        const msRoh = erstesFeld(roh, ['timeLimitMs', 'zeitMs']);
+        let sekunden = DEFAULT_ANSWER_SECONDS;
+        if (typeof sekundenRoh === 'number' && Number.isFinite(sekundenRoh)) {
+            sekunden = Math.round(sekundenRoh);
+        }
+        else if (typeof msRoh === 'number' && Number.isFinite(msRoh)) {
+            sekunden = Math.round(msRoh / 1000);
+        }
+        const erklaerungRoh = erstesFeld(roh, ['erklaerung', 'erklärung', 'explanation', 'hinweis']);
+        bloecke.push({
+            nr,
+            promptRoh: prompt,
+            sekunden,
+            sekundenAngegeben: true,
+            antworten: antworten.map((a) => ({ nr, label: a.label, markiert: a.markiert })),
+            erklaerung: typeof erklaerungRoh === 'string' && erklaerungRoh.trim() !== ''
+                ? entferneAuszeichnung(erklaerungRoh).trim()
+                : null,
+            zeilen: 1,
+        });
+    });
+    if (bloecke.length > MAX_QUESTIONS) {
+        return {
+            ok: false,
+            titel,
+            questions: [],
+            hinweise: [],
+            quelle: 'json',
+            fehler: [
+                {
+                    zeile: 0,
+                    text: `Die Datei hat ${bloecke.length} Fragen. ` +
+                        `Mehr als ${MAX_QUESTIONS} nimmt die Seite nicht an. Teil sie auf zwei Runden auf.`,
+                },
+            ],
+        };
+    }
+    const questions = pruefeUndBaue(bloecke, fehler);
+    fehler.sort((a, b) => a.zeile - b.zeile);
+    return {
+        ok: fehler.length === 0 && questions.length > 0,
+        titel,
+        questions,
+        fehler,
+        hinweise: [],
+        quelle: 'json',
+    };
+}
+function siehtNachJsonAus(text) {
+    const t = text.trim();
+    return t.startsWith('{') || t.startsWith('[');
+}
+function parseQuiz(raw) {
+    const text = normalisiereText(raw);
+    const alleZeilen = text.split('\n').map((t, i) => ({ nr: i + 1, text: t }));
+    const ohneZaun = alleZeilen.filter((z) => !ZAUN.test(z.text));
+    const kern = ohneZaun
+        .map((z) => z.text)
+        .join('\n')
+        .trim();
+    if (kern === '') {
+        return {
+            ok: false,
+            titel: 'Quizbude',
+            questions: [],
+            hinweise: [],
+            quelle: 'zeilen',
+            fehler: [
+                {
+                    zeile: 1,
+                    text: 'Da steht noch keine Frage. Schreib eine Frage und darunter die Antworten.',
+                },
+            ],
+        };
+    }
+    if (siehtNachJsonAus(kern))
+        return parseJson(kern, ohneZaun);
+    const { bloecke, titel, fehler } = zuBloecken(ohneZaun);
+    const getrennt = trenneBeiwerk(bloecke);
+    if (getrennt.bloecke.length === 0) {
+        fehler.push({
+            zeile: 1,
+            text: 'Da steht noch keine Frage. Schreib eine Frage und darunter die Antworten.',
+        });
+        return {
+            ok: false,
+            titel: titel === '' ? 'Quizbude' : titel,
+            questions: [],
+            fehler,
+            hinweise: getrennt.hinweise,
+            quelle: 'zeilen',
+        };
+    }
+    if (getrennt.bloecke.length > MAX_QUESTIONS) {
+        const zuviel = getrennt.bloecke[MAX_QUESTIONS];
+        fehler.push({
+            zeile: zuviel === undefined ? 1 : zuviel.nr,
+            text: `Die Datei hat ${getrennt.bloecke.length} Fragen. ` +
+                `Mehr als ${MAX_QUESTIONS} nimmt die Seite nicht an. Teil sie auf zwei Runden auf.`,
+        });
+        return {
+            ok: false,
+            titel: titel === '' ? 'Quizbude' : titel,
+            questions: [],
+            fehler,
+            hinweise: getrennt.hinweise,
+            quelle: 'zeilen',
+        };
+    }
+    const questions = pruefeUndBaue(getrennt.bloecke, fehler);
+    fehler.sort((a, b) => a.zeile - b.zeile);
+    return {
+        ok: fehler.length === 0 && questions.length > 0,
+        titel: titel === '' ? 'Quizbude' : titel,
+        questions,
+        fehler,
+        hinweise: getrennt.hinweise,
+        quelle: 'zeilen',
+    };
+}
+const DEMO_TEXT = [
+    '# Quizbude — Demorunde',
+    '',
+    'Welcher Planet ist der Sonne am nächsten? | 20',
+    '* Merkur',
+    'Venus',
+    'Mars',
+    'Jupiter',
+    '> Merkur umkreist die Sonne im Mittel in 58 Millionen Kilometern Abstand.',
+    '',
+    'Ein Oktopus hat drei Herzen. | 15',
+    '* Wahr',
+    'Falsch',
+    '> Zwei Kiemenherzen pumpen durch die Kiemen, ein Körperherz durch den Rest.',
+    '',
+].join('\n');
+  return {
+    ALL_ANSWERED_SETTLE_MS: ALL_ANSWERED_SETTLE_MS,
+    ANNOUNCE_MS: ANNOUNCE_MS,
+    DEFAULT_ANSWER_SECONDS: DEFAULT_ANSWER_SECONDS,
+    DEMO_TEXT: DEMO_TEXT,
+    ESTIMATE_REVEAL_MS: ESTIMATE_REVEAL_MS,
+    ESTIMATE_SCOREBOARD_MS: ESTIMATE_SCOREBOARD_MS,
+    KI_ANWEISUNG: KI_ANWEISUNG,
+    LATE_GRACE_MS: LATE_GRACE_MS,
+    MAX_ANSWER_SECONDS: MAX_ANSWER_SECONDS,
+    MAX_NAME_CHARS: MAX_NAME_CHARS,
+    MAX_OPTION_CHARS: MAX_OPTION_CHARS,
+    MAX_PROMPT_CHARS: MAX_PROMPT_CHARS,
+    MAX_QUESTIONS: MAX_QUESTIONS,
+    MAX_UPLOAD_BYTES: MAX_UPLOAD_BYTES,
+    MIN_ANSWER_SECONDS: MIN_ANSWER_SECONDS,
+    PLAYER_HARD_CAP: PLAYER_HARD_CAP,
+    PLAYER_SOFT_WARN: PLAYER_SOFT_WARN,
+    READING_BASE_MS: READING_BASE_MS,
+    READING_MIN_MS: READING_MIN_MS,
+    READING_PER_OPTION_WORD_MS: READING_PER_OPTION_WORD_MS,
+    READING_PER_PROMPT_WORD_MS: READING_PER_PROMPT_WORD_MS,
+    countWords: countWords,
+    dauerText: dauerText,
+    dekodiereUtf8: dekodiereUtf8,
+    entferneAuszeichnung: entferneAuszeichnung,
+    escapeHtml: escapeHtml,
+    normalisiereText: normalisiereText,
+    parseQuiz: parseQuiz,
+    pruefbericht: pruefbericht,
+    readingWindowMs: readingWindowMs,
+    schaetzeDauerMs: schaetzeDauerMs,
+    siehtNachJsonAus: siehtNachJsonAus,
+  };
+})();
+/* === KERN ENDE === */
+
+/* ---------- Konstanten: eine Quelle, aus dem Kern uebernommen ---------- */
+const ANNOUNCE_MS = Kern.ANNOUNCE_MS;
+const LATE_GRACE_MS = Kern.LATE_GRACE_MS;
+const ALL_ANSWERED_SETTLE_MS = Kern.ALL_ANSWERED_SETTLE_MS;
+const PLAYER_SOFT_WARN = Kern.PLAYER_SOFT_WARN;
+
+const READING_BASE_MS = Kern.READING_BASE_MS;
+const READING_PER_PROMPT_WORD_MS = Kern.READING_PER_PROMPT_WORD_MS;
+const READING_PER_OPTION_WORD_MS = Kern.READING_PER_OPTION_WORD_MS;
+const READING_MIN_MS = Kern.READING_MIN_MS;          /* keine Obergrenze */
+
+const MAX_PROMPT_CHARS = Kern.MAX_PROMPT_CHARS;
+const MAX_OPTION_CHARS = Kern.MAX_OPTION_CHARS;
+const MAX_NAME_CHARS = Kern.MAX_NAME_CHARS;
 
 /* ---------- Konstanten (scoring/constants.ts) ---------- */
 const FULL_POINTS_THRESHOLD_MS = 500;
@@ -516,22 +1273,10 @@ const FORMEN = ['f-blitz','f-tropfen','f-herz','f-mond'];
    Reine Funktionen
    ========================================================================= */
 
-function countWords(text){
-  const t = String(text).trim();
-  if (t.length === 0) return 0;
-  return t.split(/\s+/u).length;
-}
-
-/* reading.ts — 1,5 s + 0,40 s je Fragewort + 0,15 s je Antwortwort, Minimum 10 s */
-function readingWindowMs(prompt, optionLabels){
-  const promptWords = countWords(prompt);
-  let optionWords = 0;
-  for (const label of optionLabels) optionWords += countWords(label);
-  const raw = READING_BASE_MS
-    + READING_PER_PROMPT_WORD_MS * promptWords
-    + READING_PER_OPTION_WORD_MS * optionWords;
-  return Math.max(Math.round(raw), READING_MIN_MS);
-}
+/* countWords und readingWindowMs stehen im Kern-Block oben - eine Formel,
+   nicht zwei. Hier nur die Namen, die der Rest der Seite benutzt. */
+const countWords = Kern.countWords;
+const readingWindowMs = Kern.readingWindowMs;
 
 /* scoring/score.ts */
 function maxPointsOf(units, unitValue, pointsFactor){
@@ -640,128 +1385,11 @@ function tileColorIndex(display, anzahl){
    Fragen: Parser für das Zeilenformat
    ========================================================================= */
 
-const DEMO_TEXT =
-'# Quizbude — Demorunde\n' +
-'\n' +
-'Welcher Planet ist der Sonne am nächsten? | 20\n' +
-'* Merkur\n' +
-'Venus\n' +
-'Mars\n' +
-'Jupiter\n' +
-'> Merkur umkreist die Sonne im Mittel in 58 Millionen Kilometern Abstand.\n' +
-'\n' +
-'Ein Oktopus hat drei Herzen. | 15\n' +
-'* Wahr\n' +
-'Falsch\n' +
-'> Zwei Kiemenherzen pumpen durch die Kiemen, ein Körperherz durch den Rest.\n';
-
-function parseQuiz(text){
-  const zeilen = String(text).replace(/\r/g, '').split('\n');
-  const fehler = [];
-  const bloecke = [];
-  let titel = 'Quizbude';
-  let aktuell = null;
-  let titelErlaubt = true;
-
-  const schliessen = () => { if (aktuell) bloecke.push(aktuell); aktuell = null; };
-
-  for (let i = 0; i < zeilen.length; i += 1){
-    const roh = zeilen[i];
-    const zeile = roh.trim();
-    const nr = i + 1;
-    if (zeile === ''){ schliessen(); continue; }
-
-    if (titelErlaubt && zeile.startsWith('#')){
-      const t = zeile.replace(/^#+\s*/, '').trim();
-      if (t) titel = t;
-      titelErlaubt = false;
-      continue;
-    }
-
-    if (aktuell === null){
-      titelErlaubt = false;
-      let prompt = zeile;
-      let sekunden = 20;
-      const m = prompt.match(/\s*\|\s*(\d{1,3})\s*$/);
-      if (m){
-        sekunden = parseInt(m[1], 10);
-        prompt = prompt.slice(0, m.index).trim();
-      }
-      aktuell = { zeile: nr, prompt, sekunden, antworten: [], richtig: [], erklaerung: null };
-      continue;
-    }
-
-    if (zeile.startsWith('>')){
-      const e = zeile.slice(1).trim();
-      aktuell.erklaerung = aktuell.erklaerung ? aktuell.erklaerung + ' ' + e : e;
-      continue;
-    }
-
-    let istRichtig = false;
-    let label = zeile;
-    if (/^[*+]/.test(label)){ istRichtig = true; label = label.slice(1).trim(); }
-    else if (/^-\s/.test(label)){ label = label.slice(1).trim(); }
-    if (istRichtig) aktuell.richtig.push(aktuell.antworten.length);
-    aktuell.antworten.push({ label, zeile: nr });
-  }
-  schliessen();
-
-  if (bloecke.length === 0){
-    fehler.push('Da steht noch keine Frage. Schreib eine Frage, darunter die Antworten.');
-    return { ok:false, fehler, titel, questions: [] };
-  }
-
-  const questions = [];
-  bloecke.forEach((b, idx) => {
-    const nr = idx + 1;
-    const wo = 'Frage ' + nr + ' (Zeile ' + b.zeile + ')';
-
-    if (b.prompt.length === 0) fehler.push(wo + ': Der Fragetext fehlt.');
-    if (b.prompt.length > MAX_PROMPT_CHARS){
-      fehler.push(wo + ': ' + b.prompt.length + ' Zeichen. ' + MAX_PROMPT_CHARS +
-        ' sind das Maximum — kürz sie um ' + (b.prompt.length - MAX_PROMPT_CHARS) + '.');
-    }
-    if (b.sekunden < 5 || b.sekunden > 300){
-      fehler.push(wo + ': Die Antwortzeit muss zwischen 5 und 300 Sekunden liegen.');
-    }
-    if (b.antworten.length < 2){
-      fehler.push(wo + ': Mindestens zwei Antworten. Eine Frage mit einer Antwort ist keine Frage.');
-    }
-    if (b.antworten.length > 4){
-      fehler.push(wo + ': ' + b.antworten.length + ' Antworten. Vier sind das Maximum — ' +
-        'fehlt zwischen zwei Fragen vielleicht eine Leerzeile?');
-    }
-    b.antworten.forEach((a, ai) => {
-      if (a.label.length === 0) fehler.push(wo + ': Antwort ' + (ai + 1) + ' ist leer.');
-      if (a.label.length > MAX_OPTION_CHARS){
-        fehler.push(wo + ': Antwort ' + (ai + 1) + ' hat ' + a.label.length + ' Zeichen, erlaubt sind ' + MAX_OPTION_CHARS + '.');
-      }
-    });
-    if (b.richtig.length === 0){
-      fehler.push(wo + ': Keine Antwort ist markiert. Setz ein * vor die richtige.');
-    } else if (b.richtig.length > 1){
-      fehler.push(wo + ': ' + b.richtig.length + ' Antworten sind markiert. Genau eine darf es sein.');
-    }
-
-    const labels = b.antworten.map(a => a.label);
-    const istWahrFalsch = labels.length === 2
-      && labels[0].toLocaleLowerCase('de') === 'wahr'
-      && labels[1].toLocaleLowerCase('de') === 'falsch';
-
-    questions.push({
-      id: 'q' + nr,
-      type: istWahrFalsch ? 'true_false' : 'single_choice',
-      prompt: b.prompt,
-      timeLimitMs: b.sekunden * 1000,
-      pointsFactor: 1,
-      spec: istWahrFalsch
-        ? { correct: b.richtig[0] === 0, explanation: b.erklaerung }
-        : { options: labels.map(l => ({ label: l })), correctIndex: b.richtig.length === 1 ? b.richtig[0] : 0, explanation: b.erklaerung }
-    });
-  });
-
-  return { ok: fehler.length === 0, fehler, titel, questions };
-}
+/* Der Parser steht im Kern-Block oben. Diese Seite liest ihn, sie haelt
+   keine zweite Fassung davon. */
+const DEMO_TEXT = Kern.DEMO_TEXT;
+const parseQuiz = Kern.parseQuiz;
+const pruefbericht = Kern.pruefbericht;
 
 /* Typabhängiges — aus questions/singleChoice.ts und questions/trueFalse.ts */
 function optionLabelsOf(q){
@@ -1954,29 +2582,126 @@ function renderPlay(){
 }
 
 /* =========================================================================
-   Editor
+   Fragen laden
+
+   Der Autor einer Fragendatei ist ein Sprachmodell. Gelesen wird die Datei
+   hier im Browser, nie auf einem Server. Erst steht der Pruefbericht, dann
+   oeffnet ein ausdruecklicher Klick die Lobby.
    ========================================================================= */
+
+let geprueft = null;        /* letztes Ergebnis von parseQuiz */
+
+/* Reine Funktion: baut den Pruefbericht als HTML. Jede Fremdeingabe geht
+   durch Kern.escapeHtml - Fragetext, Titel, Meldung. Ohne DOM-Zugriff,
+   damit der Test genau diese ausgelieferte Fassung ausfuehren kann. */
+function berichtHtml(bericht){
+  const e = Kern.escapeHtml;
+  const kopf = '<dl>' +
+    '<dt>Titel</dt><dd>' + e(bericht.titel) + '</dd>' +
+    '<dt>Fragen</dt><dd>' + e(String(bericht.fragenzahl)) + '</dd>' +
+    '<dt>Dauer</dt><dd>' + e(bericht.dauerText) + '</dd>' +
+    '</dl>';
+  const hinweise = bericht.hinweise.length > 0
+    ? '<p class="hinweis">' + bericht.hinweise.map(e).join('<br>') + '</p>'
+    : '';
+  if (bericht.ok){
+    return kopf + hinweise + '<p class="gut">Alles in Ordnung. Du kannst die Bühne eröffnen.</p>';
+  }
+  const liste = bericht.fehler.map(f =>
+    '<li>' + (f.zeile > 0 ? '<b>Zeile ' + e(String(f.zeile)) + ':</b> ' : '') + e(f.text) + '</li>'
+  ).join('');
+  return kopf + hinweise + '<p><b>Das passt noch nicht:</b></p><ul>' + liste + '</ul>';
+}
+
+function verbergeBericht(){
+  $('pruefbericht').hidden = true;
+  $('btn-editor-buehne').hidden = true;
+  $('btn-editor-uebernehmen').hidden = true;
+  geprueft = null;
+}
+
+function zeigeBericht(erg){
+  geprueft = erg;
+  const bericht = pruefbericht(erg);
+  const el = $('pruefbericht');
+  el.innerHTML = berichtHtml(bericht);
+  el.hidden = false;
+  $('btn-editor-buehne').hidden = !bericht.ok;
+  $('btn-editor-uebernehmen').hidden = !bericht.ok;
+  $('editormeldung').textContent = '';
+}
+
+function pruefeEditor(){
+  zeigeBericht(parseQuiz($('editorfeld').value));
+}
+
+/* Die Datei wird im Browser gelesen, nicht verschickt. Deckel gegen
+   haengende Seiten: Groesse hier, Fragenzahl im Kern. */
+function ladeDatei(datei){
+  if (!datei) return;
+  verbergeBericht();
+  if (datei.size > Kern.MAX_UPLOAD_BYTES){
+    $('editormeldung').textContent =
+      'Die Datei ist ' + Math.round(datei.size / 1024) + ' kB groß. Mehr als ' +
+      Math.round(Kern.MAX_UPLOAD_BYTES / 1024) + ' kB nimmt die Seite nicht an. ' +
+      'Teil die Fragen auf mehrere Dateien auf.';
+    return;
+  }
+  const leser = new FileReader();
+  leser.onerror = () => {
+    $('editormeldung').textContent = 'Die Datei ließ sich nicht lesen. Versuch es noch einmal.';
+  };
+  leser.onload = () => {
+    const erg = Kern.dekodiereUtf8(new Uint8Array(leser.result));
+    if (!erg.ok){ $('editormeldung').textContent = erg.meldung; return; }
+    $('editorfeld').value = erg.text;
+    zeigeBericht(parseQuiz(erg.text));
+  };
+  leser.readAsArrayBuffer(datei);
+}
+
+/* navigator.clipboard darf abgelehnt werden - dann markieren wir den Block. */
+function kopiereAnweisung(){
+  const stand = $('kopierstand');
+  const rueckfall = () => {
+    try {
+      const bereich = document.createRange();
+      bereich.selectNodeContents($('ki-anweisung'));
+      const auswahl = window.getSelection();
+      auswahl.removeAllRanges();
+      auswahl.addRange(bereich);
+      stand.textContent = 'Markiert — jetzt Strg+C drücken.';
+    } catch (e) {
+      stand.textContent = 'Markier den Block und kopier ihn mit Strg+C.';
+    }
+  };
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function'){
+    navigator.clipboard.writeText(Kern.KI_ANWEISUNG)
+      .then(() => { stand.textContent = 'Kopiert.'; })
+      .catch(rueckfall);
+  } else {
+    rueckfall();
+  }
+}
 
 function zumEditor(meldung){
   rolle = 'editor';
   zeige('s-editor');
   $('editormeldung').textContent = meldung || '';
+  $('ki-anweisung').textContent = Kern.KI_ANWEISUNG;
+  $('kopierstand').textContent = '';
   if (!$('editorfeld').value) $('editorfeld').value = erinnere('quiztext') || DEMO_TEXT;
+  pruefeEditor();
 }
 
-function editorUebernehmen(){
-  const text = $('editorfeld').value;
-  const erg = parseQuiz(text);
-  const m = $('editormeldung');
-  if (!erg.ok){
-    m.innerHTML = '<b>Das passt noch nicht:</b><ul>' + erg.fehler.map(f => '<li>' + esc(f) + '</li>').join('') + '</ul>';
-    return;
-  }
-  quiz = erg;
-  merke('quiztext', text);
+function editorUebernehmen(zurBuehne){
+  if (geprueft === null || !geprueft.ok){ pruefeEditor(); return; }
+  quiz = geprueft;
+  merke('quiztext', $('editorfeld').value);
   if (schnappschuss) schnappschuss();
-  m.textContent = '';
-  zumStart();
+  $('editormeldung').textContent = '';
+  if (zurBuehne) buehneEroeffnen();
+  else zumStart();
 }
 
 /* =========================================================================
@@ -1996,8 +2721,47 @@ function boot(){
   $('btn-mitspielen').addEventListener('click', () => { rolle = 'join'; zeige('s-join'); $('codefeld').focus(); });
   $('btn-editor').addEventListener('click', () => zumEditor(''));
   $('btn-editor-zurueck').addEventListener('click', zumStart);
-  $('btn-editor-demo').addEventListener('click', () => { $('editorfeld').value = DEMO_TEXT; $('editormeldung').textContent = ''; });
-  $('btn-editor-uebernehmen').addEventListener('click', editorUebernehmen);
+  $('btn-editor-demo').addEventListener('click', () => {
+    $('editorfeld').value = DEMO_TEXT;
+    $('editormeldung').textContent = '';
+    pruefeEditor();
+  });
+  $('btn-editor-pruefen').addEventListener('click', pruefeEditor);
+  $('btn-editor-uebernehmen').addEventListener('click', () => editorUebernehmen(false));
+  $('btn-editor-buehne').addEventListener('click', () => editorUebernehmen(true));
+  $('btn-anweisung-kopieren').addEventListener('click', kopiereAnweisung);
+
+  /* Datei waehlen und Datei ablegen - beides landet in derselben Tuer. */
+  $('btn-datei').addEventListener('click', () => $('dateifeld').click());
+  $('dateifeld').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+    ladeDatei(f);
+    e.target.value = '';
+  });
+  $('editorfeld').addEventListener('input', verbergeBericht);
+
+  const ablegeZonen = [$('ablage'), $('s-editor')];
+  ablegeZonen.forEach((zone) => {
+    ['dragenter','dragover'].forEach((ev) => zone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      $('ablage').classList.add('bereit');
+    }));
+    ['dragleave','dragend'].forEach((ev) => zone.addEventListener(ev, () => {
+      $('ablage').classList.remove('bereit');
+    }));
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      $('ablage').classList.remove('bereit');
+      const dt = e.dataTransfer;
+      ladeDatei(dt && dt.files && dt.files[0] ? dt.files[0] : null);
+    });
+  });
+  /* Faellt eine Datei neben die Ablage, bleibt das folgenlos: ohne das
+     ersetzt der Browser die ganze Seite durch die Datei. Die Zonen oben
+     haben da laengst zugegriffen - Ereignisse steigen von innen nach aussen. */
+  ['dragover','drop'].forEach((ev) => document.addEventListener(ev, (e) => {
+    e.preventDefault();
+  }));
   $('btn-join').addEventListener('click', mitspielen);
   $('btn-join-zurueck').addEventListener('click', zumStart);
   $('btn-play-zurueck').addEventListener('click', zumStart);
