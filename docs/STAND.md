@@ -4,12 +4,12 @@
 
 ## Wo wir stehen
 
-Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, **Ein-Klick-Start gebaut**.
+Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, Ein-Klick-Start gebaut, **Ein-Klick-Start reviewt und die Befunde behoben**.
 
 **Selbst nachgemessen am Ende des Tages** (nicht aus Berichten übernommen):
 
 ```
-npm test        150 Tests, 19 Dateien, grün, Exit 0
+npm test        191 Tests, 21 Dateien, grün, Exit 0
 npx tsc         Exit 0  (strict: true aus tsconfig.base.json)
 npm run build   Exit 0  (Spielergerät: kritischer Pfad 63,45 kB gzip)
 Arbeitsbaum     sauber
@@ -44,6 +44,25 @@ R1, NR2 und NR3 sind **bewiesen**. NR1 war nur teilweise bewiesen, und NR3 hatte
 
 **Die Lehre dieser Welle:** B1 und B2 waren derselbe Fehlertyp — ein Wächter, der so tut, als könne ein regulärer Ausdruck Quelltext zerlegen. Beide sind jetzt nicht enger gefasst, sondern anders gebaut: E1 hängt zusätzlich an einem Verhaltenstest (`test/host/wire.test.ts`), die Importprüfung am TypeScript-Parser (`test/quelltext.ts`). Einzelheiten in `bericht-fixwelle-3.md`.
 
+## Was das Review des Ein-Klick-Starts ergeben hat
+
+Der tiefere Befund war keiner der sieben: **`main.ts` war von keinem Test berührt.** Der Prüfer konnte dort den Exit-Code auf 0 drehen, die Portnachführung entfernen (am Gerät eine Endlosschleife, 97711 Durchläufe in sechs Sekunden) und die Browser-Adresse fest verdrahten — alle 150 Tests blieben grün. Die Entscheidungen beim Hochfahren stehen deshalb jetzt in `packages/server/src/runtime/startup.ts`; `main.ts` verdrahtet nur noch.
+
+| | Befund | Stand |
+|---|---|---|
+| B1 | `listen(port)` ohne Host band im Dual-Stack neben einem fremden IPv4-Programm auf 3000 — ohne `EADDRINUSE`, ohne Ausweichen. Der Gastgeber sah über `::1` eine laufende Bühne, die Gäste landeten beim fremden Programm | behoben, Bindung auf `0.0.0.0`, `e29d2fd` |
+| B2 | `PORT=abc` endete mit Exit 0, und die `.cmd` meldete „Die Runde ist vorbei" | behoben, `e29d2fd` |
+| B3 | Der Banner sagte auch einen Kandidaten ohne Vorbehalt an, den die eigene Heuristik mit −16 bewertet hatte | behoben, `d2ee5d4` |
+| B4 | Bei `PORT=0` nannte der Banner Port 0 statt des vergebenen | behoben, `e29d2fd` |
+| B5 | Ein Fehler **nach** dem `listening` beendete den Abend | behoben, `e29d2fd` |
+| B6 | Eine abgebrochene Installation wurde nie nachgeholt | behoben, `f8f302b` |
+| B7 | Strg+C führte in den Fehlerzweig mit falscher Begründung | behoben, `f8f302b` |
+| T1 | Der Familienriegel `isIPv4` ließ sich ersatzlos streichen | gebunden, `d2ee5d4` |
+
+**Die Lehre dieser Welle:** die offene Stelle war wieder die Naht, nicht die Bausteine. Vier Module waren dicht gebunden, die Datei, die sie verdrahtet, von nichts. Vierzehn Rücknahmeproben, dreizehn rot, eine Leerprobe grün; dazu die Nachstellung am Gerät für B1, B2 und B4. Einzelheiten in `bericht-fixwelle-einklickstart.md`.
+
+Sichtbare Folge für den Gastgeber: die Bühne heißt jetzt `http://127.0.0.1:<port>/host/` statt `localhost` — nach der IPv4-Bindung löst `localhost` unter Windows zuerst nach `::1` auf, wo niemand mehr lauscht.
+
 ## Entschieden: die beiden Nutzerentscheidungen sind gefallen
 
 - **Lesefenster.** Die 10-Sekunden-Kappung **entfällt als Obergrenze**. Das Fenster wird dynamisch berechnet und hat eine **Mindestdauer von 10 s je Frage** (`READING_MIN_MS = 10000`, kein `READING_MAX_MS` mehr). Eine Frage an der 200-Zeichen-Grenze bekommt damit ihre 15,3 s statt gekappter 10 s; früher freigeben kann der Host jederzeit mit der Leertaste. Umgesetzt in `d0959a4`, nachgezogen in `konzept-ux.md` Abschnitt 3.
@@ -74,9 +93,12 @@ Neu aus der dritten Welle, bewusst nicht behoben:
 Neu aus dem Ein-Klick-Start, bewusst nicht behoben:
 
 - **QR-Code auf der Bühne.** Gehört zur zweiten Welle und war ausdrücklich nicht im Paket. Mit der jetzt gewählten Adresse ist es ein kleiner Schritt.
-- **Öffentliche IPv4 wird nicht angeboten.** Kandidaten sind nur die privaten Bereiche. Ein Rechner mit öffentlicher IPv4 direkt am Anschluss bekäme keinen Vorschlag.
-- **`::` und `0.0.0.0` teilen sich unter Windows denselben Port.** Hält ein fremdes Programm die 3000 auf `0.0.0.0`, bindet die Quizbude die 3000 auf `::` ohne auszuweichen — ein Handy über IPv4 landet dann womöglich beim fremden Programm. Einzelheiten in `bericht-einklickstart.md`.
-- **Der Fall „alle elf Ports belegt"** ist als Test gebunden, am Gerät aber nicht nachgestellt.
+- **Öffentliche IPv4 wird nicht angeboten.** Kandidaten sind nur die privaten Bereiche. Ein Rechner mit öffentlicher IPv4 direkt am Anschluss bekäme keinen Vorschlag — und liest heute „Keine Adresse im lokalen Netz gefunden - ist das WLAN an?", eine Frage in die falsche Richtung.
+- **IPv6 wird nicht bedient.** Gebunden wird seit B1 ausdrücklich auf `0.0.0.0`, damit ein IPv4-Konflikt überhaupt gesehen wird. Ein reiner IPv6-Client kommt damit nicht durch; am Spieleabend ist das kein Fall.
+- **`tools/build-needed.mjs` hat kein Tor.** Die Datei ist `.mjs` und steht in keinem `include` — weder `tsc` noch ein Test fasst sie an. Sechs Lagen sind von Hand gefahren.
+- **UNC-Pfad im Starter.** Liegt der Ordner auf einer Netzfreigabe, scheitert `cd /d` still und die Diagnose zeigt auf das Internet. Restrisiko; ein Spieleabend-Rechner hat die Dateien lokal.
+- **Windows-MAC-Randomisierung.** Ein echtes WLAN mit zufälliger Hardwareadresse gilt `isVirtualMac` als virtuell. In allen geprüften Paarungen gewinnt es trotzdem — das Merkmal ist dort aber wertlos.
+- **Ob eine negativ bewertete Karte überhaupt angeboten werden soll**, ist eine Nutzerentscheidung. Seit B3 wird sie wenigstens als Vermutung ausgewiesen.
 
 Dazu: die Zeitleiste in `konzept-ux.md` Abschnitt 3 nennt jetzt T−13,0 bis T0 — das ist die Mindestdauer; eine lange Frage schiebt den Anfang weiter nach vorn.
 
@@ -100,11 +122,11 @@ Folgeaufgaben aus Review und Fix-Wellen stehen in `review-durchstich.md`, `beric
 
 Die Datei prüft Node, holt beim ersten Mal die Bausteine, baut nur, wenn sich etwas geändert hat, startet den Server und öffnet die Bühne im Standardbrowser. Das Fenster bleibt offen, solange der Server läuft; zum Beenden schließt man es.
 
-Was dabei auf dem Bildschirm steht, ist die Adresse für die Gäste — nicht `localhost`, das zeigt auf ihr eigenes Telefon, sondern die Adresse dieses Rechners im WLAN. Der wahrscheinlichste Kandidat steht groß, die übrigen darunter als Alternativen, jeweils mit dem Namen der Netzwerkkarte. Liegt die Vermutung daneben, nimmt man die nächste Zeile.
+Was dabei auf dem Bildschirm steht, ist die Adresse für die Gäste — nicht `localhost`, das zeigt auf ihr eigenes Telefon, sondern die Adresse dieses Rechners im WLAN. Der wahrscheinlichste Kandidat steht groß, die übrigen darunter als Alternativen, jeweils mit dem Namen der Netzwerkkarte. Liegt die Vermutung daneben, nimmt man die nächste Zeile. Hält die Heuristik ihren eigenen besten Kandidaten für virtuell, sagt sie „Wahrscheinlich" statt „Das" und fragt nach dem WLAN.
 
 **Beim allerersten Start fragt Windows, ob Node im Netzwerk annehmen darf.** Erlauben — und den Haken bei **„Privat"** setzen. Wird das weggeklickt oder nur „Öffentlich" erlaubt, kommt kein Handy durch, und es sieht aus wie ein Programmfehler.
 
-Ist Port 3000 belegt, nimmt der Server den nächsten freien bis 3010 und sagt, welchen. Wer `PORT` von Hand setzt, bekommt kein Ausweichen: dann gilt genau dieser Port, und ist er belegt, endet der Start mit Exit-Code 1.
+Ist Port 3000 belegt, nimmt der Server den nächsten freien bis 3010 und sagt, welchen — auch dann, wenn das fremde Programm nur IPv4 hält. Wer `PORT` von Hand setzt, bekommt kein Ausweichen: dann gilt genau dieser Port, und ist er belegt, endet der Start mit Exit-Code 1. Ein `PORT`, das keine Portnummer ist, endet ebenfalls mit 1 und sagt warum.
 
 ### Der zweite Weg: über die Kommandozeile
 
@@ -115,7 +137,7 @@ npm run build
 npm start
 ```
 
-Bühne: `http://localhost:3000/host/` · Spielergerät: `http://localhost:3000/play/`
+Bühne: `http://127.0.0.1:3000/host/` · Spielergerät: `http://127.0.0.1:3000/play/`
 Anderer Port in PowerShell: `$env:PORT=3100; npm start`
 
 Zum echten Testen drei Fenster: eins als Bühne, zwei als Spieler — eins davon im Privatmodus, sonst teilen sie sich den Browserspeicher.
@@ -154,3 +176,5 @@ Zum echten Testen drei Fenster: eins als Bühne, zwei als Spieler — eins davon
 | `nachreview-fixwelle-2.md` | Nachreview der zweiten Welle: fünf Befunde, zwei Wächter mit getauschten Lücken |
 | `bericht-fixwelle-3.md` | Dritte Welle: B1–B5, E1 am Verhalten, Importprüfung am Parser |
 | `bericht-einklickstart.md` | Ein-Klick-Start: Doppelklick, WLAN-Adresse, Portausweichen, 18 Rücknahmeproben |
+| `review-einklickstart.md` | Unabhängiges Review des Ein-Klick-Starts: sieben Befunde, drei Mutationen an der Verdrahtung blieben grün |
+| `bericht-fixwelle-einklickstart.md` | Vierte Welle: B1–B7 und T1, Startentscheidungen in `startup.ts`, vierzehn Rücknahmeproben |
