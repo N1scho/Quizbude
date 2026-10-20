@@ -4,12 +4,12 @@
 
 ## Wo wir stehen
 
-Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, **Nachreview erledigt**, zweite Fix-Welle durchgelaufen.
+Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen.
 
 **Selbst nachgemessen am Ende des Tages** (nicht aus Berichten übernommen):
 
 ```
-npm test        105 Tests, 12 Dateien, grün, Exit 0
+npm test        118 Tests, 15 Dateien, grün, Exit 0
 npx tsc         Exit 0  (strict: true aus tsconfig.base.json)
 npm run build   Exit 0  (Spielergerät: kritischer Pfad 63,45 kB gzip)
 Arbeitsbaum     sauber
@@ -29,6 +29,21 @@ Das Nachreview fand dabei drei neue Befunde — zwei davon waren durchlässige W
 
 Die zweite Welle hat sie geschlossen, jede mit eigener Rücknahmeprobe. Einzelheiten in `bericht-fixwelle-2.md`.
 
+## Was das Nachreview der zweiten Welle ergeben hat
+
+R1, NR2 und NR3 sind **bewiesen**. NR1 war nur teilweise bewiesen, und NR3 hatte beim Umbau eine neue Lücke aufgerissen: **zwei Wächter hatten je eine Lücke gegen eine andere getauscht.** Siebzehn Rücknahmeproben, kein Falsch-Grün in den neuen Tests. Der Bericht liegt als `nachreview-fixwelle-2.md`.
+
+| | Befund | Stand |
+|---|---|---|
+| B1 | Der E1-Wächter las genau eine Datei; eine Zeile im bestehenden `connect`-Handler von `wire.ts` stellte E1 vollständig wieder her, während alle 105 Tests grün blieben | behoben, `60c54f7` |
+| B2 | Die Importprüfung entfernte Blockkommentare ohne String-Bewusstsein; ein Kommentaranfang in einem Stringliteral verschluckte den nächsten echten Import | behoben, `09ef2c9` |
+| B3 | Der E1-Wächter kannte keinen Leerraum vor der Klammer | behoben, `60c54f7` |
+| B4 | `konzept-ux.md` nannte unter „Kritischer Pfad" nur den Bündelwert | behoben, `155b2ae` |
+| B5 | `MAX_PROMPT_CHARS` war definiert und wurde nirgends durchgesetzt — mit dem offenen Lesefenster tragend geworden | behoben, `d353907` |
+| R2 | Die Ping-Pong-Sperre trug nicht, was der Bericht über sie behauptete | Beschreibung korrigiert, Test unverändert, `1231fa5` |
+
+**Die Lehre dieser Welle:** B1 und B2 waren derselbe Fehlertyp — ein Wächter, der so tut, als könne ein regulärer Ausdruck Quelltext zerlegen. Beide sind jetzt nicht enger gefasst, sondern anders gebaut: E1 hängt zusätzlich an einem Verhaltenstest (`test/host/wire.test.ts`), die Importprüfung am TypeScript-Parser (`test/quelltext.ts`). Einzelheiten in `bericht-fixwelle-3.md`.
+
 ## Entschieden: die beiden Nutzerentscheidungen sind gefallen
 
 - **Lesefenster.** Die 10-Sekunden-Kappung **entfällt als Obergrenze**. Das Fenster wird dynamisch berechnet und hat eine **Mindestdauer von 10 s je Frage** (`READING_MIN_MS = 10000`, kein `READING_MAX_MS` mehr). Eine Frage an der 200-Zeichen-Grenze bekommt damit ihre 15,3 s statt gekappter 10 s; früher freigeben kann der Host jederzeit mit der Leertaste. Umgesetzt in `d0959a4`, nachgezogen in `konzept-ux.md` Abschnitt 3.
@@ -42,18 +57,26 @@ Dazu unverändert: `PLAYER_HARD_CAP` steht auf 5000 — die hergeleitete Fairnes
 
 Beide sind älter als die letzte Welle und stehen bewusst noch:
 
-- **Timerpfad ohne örtliche Fehlerbehandlung.** `scheduler.ts:21-24` ruft `onFire` im `setTimeout`-Rückruf ohne `try/catch` auf; von dort geht es über `roomHandle.ts:42-57` direkt in `step`. Aufgefangen wird ein Wurf nur noch vom Prozessnetz in `main.ts`. Relevant wird das, sobald der Editor eigene Fragen zulässt und `parseSpec` wieder werfen kann.
+- **Timerpfad ohne örtliche Fehlerbehandlung.** `scheduler.ts:21-24` ruft `onFire` im `setTimeout`-Rückruf ohne `try/catch` auf; von dort geht es über `roomHandle.ts:42-57` direkt in `step`. Aufgefangen wird ein Wurf nur noch vom Prozessnetz in `main.ts`. Relevant wird das, sobald der Editor eigene Fragen zulässt und `parseSpec` wieder werfen kann — seit B5 wirft auch `loadQuestion` am Fragetext.
 - **Stream-Fehler hinter dem `.catch`.** `static.ts:80` gibt nach `createReadStream(file).pipe(res)` sofort `true` zurück; das `.catch` in `requestListener.ts:28` kann einen Stream-Fehler deshalb strukturell nicht erreichen. Ein `.on('error')` auf dem Lesestrom schließt das.
 
 ### 2. Kleinere Folgeaufgaben
 
-Aus `bericht-fixwelle-2.md` Abschnitt „Folgeaufgaben", unverändert offen aus dem Durchstich-Review: Raum-TTL und Drosselung, die Token als Kulisse, `MAX_PROMPT_CHARS` ohne Durchsetzung, `MIN_TIME_FACTOR` ohne Wirkung. Dazu: die Zeitleiste in `konzept-ux.md` Abschnitt 3 nennt jetzt T−13,0 bis T0 — das ist die Mindestdauer; eine lange Frage schiebt den Anfang weiter nach vorn.
+Unverändert offen aus dem Durchstich-Review: Raum-TTL und Drosselung, die Token als Kulisse, `MIN_TIME_FACTOR` ohne Wirkung. `MAX_PROMPT_CHARS` ist mit `d353907` **erledigt**.
+
+Neu aus der dritten Welle, bewusst nicht behoben:
+
+- **`MAX_NAME_CHARS = 16` ist ebenso undurchgesetzt, wie `MAX_PROMPT_CHARS` es war.** Die einzige Prüfung eines Spielernamens ist `isShortString` in `validate.ts:72`; die Konstante kommt im Quelltext nicht vor. Der Namensfilter der zweiten Welle ist der Moment, in dem das zählt — `parsePrompt` in `questions/load.ts` ist die Form, in der es zu lösen wäre.
+- **Die Uhr-, Zufalls- und Timerprüfung in `purity.test.ts` läuft weiterhin zeilenweise über eine Regex.** Ein über eine Zeilengrenze geschriebenes `Date` `.now()` liefe durch. Seit B2 liegt die parserbasierte Zerlegung daneben; dieselbe Prüfung ließe sich darauf stellen.
+- **`scope: 'all'` ist am echten Server ungebunden.** `room:answers_open` entsteht frühestens 13 s nach dem Start; sauber lösbar mit einer steuerbaren Uhr im Scheduler.
+
+Dazu: die Zeitleiste in `konzept-ux.md` Abschnitt 3 nennt jetzt T−13,0 bis T0 — das ist die Mindestdauer; eine lange Frage schiebt den Anfang weiter nach vorn.
 
 ### 3. Zweite Welle, noch nicht begonnen
 
 Nicht im Durchstich und bewusst weggelassen: Quiz-Editor · SQLite-Persistenz · Reconnect mit Sitzungstoken · Podium · Auswertungsseite · QR-Code · Spieler entfernen · Lobby sperren · Namensfilter · Audio · weitere Fragetypen.
 
-Folgeaufgaben aus Review und Fix-Wellen stehen in `review-durchstich.md`, `bericht-fixwelle.md`, `nachreview-fixwelle.md` und `bericht-fixwelle-2.md`.
+Folgeaufgaben aus Review und Fix-Wellen stehen in `review-durchstich.md`, `bericht-fixwelle.md`, `nachreview-fixwelle.md`, `bericht-fixwelle-2.md`, `nachreview-fixwelle-2.md` und `bericht-fixwelle-3.md`.
 
 ## Starten
 
@@ -79,7 +102,7 @@ Zum echten Testen drei Fenster: eins als Bühne, zwei als Spieler — eins davon
 | Einsatz | Privat, Spieleabende, ~20 Spieler, kein Produktlimit |
 | Plattform | Reine Web-App; Discord Activity später möglich, Spiellogik ist transportfrei |
 | Optik | Eigene Gestaltung, **kein SIMO-Branding**, keine Kahoot-Kopie |
-| Zeichengrenzen | 200 Zeichen Frage, 100 je Antwort (nicht 120/75 wie beim Vorbild) |
+| Zeichengrenzen | 200 Zeichen Frage, 100 je Antwort (nicht 120/75 wie beim Vorbild) — beide durchgesetzt |
 | Lesefenster | Dynamisch, Mindestdauer 10 s je Frage, keine Obergrenze |
 | Ladebudget | 65 kB gzip für die Beitrittsseite, React bleibt |
 | Ergebnistyp | Richtig/Falsch, Präzisionstyp später andockbar |
@@ -100,3 +123,5 @@ Zum echten Testen drei Fenster: eins als Bühne, zwei als Spieler — eins davon
 | `bericht-fixwelle.md` | Die sechs Fixes der ersten Welle |
 | `nachreview-fixwelle.md` | Nachreview: alle sechs bewiesen behoben, drei neue Befunde |
 | `bericht-fixwelle-2.md` | Zweite Welle: NR1–NR3 und die beiden Nutzerentscheidungen |
+| `nachreview-fixwelle-2.md` | Nachreview der zweiten Welle: fünf Befunde, zwei Wächter mit getauschten Lücken |
+| `bericht-fixwelle-3.md` | Dritte Welle: B1–B5, E1 am Verhalten, Importprüfung am Parser |
