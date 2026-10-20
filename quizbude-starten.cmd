@@ -35,12 +35,19 @@ if errorlevel 1 goto keinnpm
 rem ------------------------------------------------------------------
 rem  2. Bausteine holen - nur, wenn sie fehlen.
 rem ------------------------------------------------------------------
-if exist "node_modules" goto bauen
+rem  Nicht "node_modules existiert": eine abgebrochene Installation
+rem  hinterlaesst einen halben Ordner, und jeder weitere Start hat das
+rem  Nachholen uebersprungen - der Bau scheiterte dann an fehlenden
+rem  Paketen. Erst die Marke heisst "vollstaendig geholt"; sie wird
+rem  nach einem geglueckten npm install geschrieben und kostet nichts.
+set "FERTIGMARKE=node_modules\.quizbude-vollstaendig"
+if exist "%FERTIGMARKE%" goto bauen
 echo.
 echo   Einmalig: die Bausteine werden geholt. Das dauert ein paar Minuten.
 echo.
 call npm install
 if errorlevel 1 goto installkaputt
+echo vollstaendig> "%FERTIGMARKE%"
 
 :bauen
 rem ------------------------------------------------------------------
@@ -71,7 +78,17 @@ call npm start
 set "ENDE=%errorlevel%"
 
 echo.
-if not "%ENDE%"=="0" goto serverkaputt
+if "%ENDE%"=="0" goto fertig
+rem  Strg+C beendet Node mit 0xC000013A. Das ist kein Fehler,
+rem  sondern genau das Beenden, das der Server selbst empfiehlt -
+rem  wer die Rueckfrage mit N beantwortet, landet sonst hier und
+rem  liest, alle Ports seien belegt. Beide Schreibweisen, weil cmd
+rem  den Wert je nach Lage mit oder ohne Vorzeichen fuehrt.
+if "%ENDE%"=="-1073741510" goto fertig
+if "%ENDE%"=="3221225786" goto fertig
+goto serverkaputt
+
+:fertig
 echo   Die Runde ist vorbei - der Server ist aus.
 echo.
 pause
