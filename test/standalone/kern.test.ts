@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { DEMO_TEXT, parseQuiz, pruefbericht } from '@quizbude/core';
-// @ts-expect-error - das Werkzeug ist bewusst reines JavaScript ohne Typen.
 import {
   ANFANG,
   ENDE,
@@ -11,6 +10,7 @@ import {
   lesBlock,
   schreibeBlock,
   SEITE,
+  // @ts-expect-error - das Werkzeug ist bewusst reines JavaScript ohne Typen.
 } from '../../tools/standalone-parser.mjs';
 
 /**
