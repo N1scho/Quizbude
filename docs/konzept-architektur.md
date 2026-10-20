@@ -1178,7 +1178,7 @@ Die Toleranzschwelle der Formel liegt bei `FULL_POINTS_THRESHOLD_MS = 500` (5.4)
 
 **Lobby-Darstellung.** Hier liegt die niedrigste Zahl, und sie kommt nicht aus dem Server. Die Lesbarkeitsregel des UX-Konzepts verlangt mindestens 36 px für alles Spielrelevante. Auf 1 920 px abzüglich 2 × 48 px Rand bleiben 1 824 px; ein 16-Zeichen-Name braucht bei 36 px rund 317 px plus Innenabstand, also ~340 px je Kachel — **fünf Kacheln je Zeile**. Der Namensbereich der Lobby trägt bei 80 px Zeilenhöhe etwa fünf Zeilen. **Rund 25 Namen passen in lesbarer Größe auf die Bühne.** Darüber hinaus bleibt nur: verkleinern (verletzt die Regel), scrollen (aus 3 m unlesbar) oder ehrlich zählen. Gewählt ist das Zählen; `PLAYER_SOFT_WARN = 25` macht es dem Host sichtbar, ohne irgendwen abzuweisen.
 
-**Und die Wand, die in einem echten Raum zuerst kommt**, ist keine der obigen: Ein Consumer-Access-Point verwaltet typischerweise 32–64 assoziierte Geräte, und die Beitrittsseite wird von allen gleichzeitig geladen (bei 60 kB und 20 Geräten rund 1,2 MB, bei 500 Geräten 30 MB). Das ist Umgebung, nicht Anwendung — gehört aber genannt, weil der Nutzer sie als Erstes trifft.
+**Und die Wand, die in einem echten Raum zuerst kommt**, ist keine der obigen: Ein Consumer-Access-Point verwaltet typischerweise 32–64 assoziierte Geräte, und die Beitrittsseite wird von allen gleichzeitig geladen (bei 65 kB und 20 Geräten rund 1,3 MB, bei 500 Geräten 32,5 MB). Das ist Umgebung, nicht Anwendung — gehört aber genannt, weil der Nutzer sie als Erstes trifft.
 
 **Verhalten beim Überschreiten — gestuft, nie abweisend:**
 
