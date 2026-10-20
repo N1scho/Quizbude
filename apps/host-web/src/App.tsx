@@ -11,6 +11,7 @@ import type {
 import { connect, type Wire } from './wire';
 import { createRoomOnce } from './session';
 import { Shape, slotFor } from './shapes';
+import { istWeiterTaste } from './tasten';
 import { Upload } from './Upload';
 
 type Stage =
@@ -183,16 +184,8 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.code !== 'Space') return;
       // Im Fragenfeld ist die Leertaste ein Leerzeichen, kein Befehl.
-      const ziel = e.target;
-      if (
-        ziel instanceof HTMLTextAreaElement ||
-        ziel instanceof HTMLInputElement ||
-        (ziel instanceof HTMLElement && ziel.isContentEditable)
-      ) {
-        return;
-      }
+      if (!istWeiterTaste(e)) return;
       e.preventDefault();
       advance();
     };
