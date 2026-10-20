@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { importSpezifizierer } from '../quelltext.js';
 
 /**
  * Die Architekturregel aus Abschnitt 1.4: core ist rein. Eine Regel, die nur
@@ -24,31 +25,26 @@ const FORBIDDEN: readonly { readonly pattern: RegExp; readonly why: string }[] =
 
 /**
  * Jede Importform, nicht nur `from '...'`: beide Anfuehrungszeichen,
- * Seiteneffekt-Importe, dynamische Importe und require - und jede davon
- * auch dann, wenn der Spezifizierer auf einer anderen Zeile steht als sein
- * Schluesselwort. `\s*` im Muster deckt den Umbruch mit ab, sobald das
- * Muster ueber der ganzen Datei laeuft statt Zeile fuer Zeile (NR3).
+ * Seiteneffekt-Importe, dynamische Importe, `import x = require(...)` und
+ * `require` - und jede davon auch dann, wenn der Spezifizierer auf einer
+ * anderen Zeile steht als sein Schluesselwort.
+ *
+ * B2: Zwei Fassungen dieses Waechters sind an ihrem eigenen Lexer
+ * gescheitert. Die zeilenweise kannte keinen Zeilenumbruch; die
+ * ganzdateiige kannte keine String-Grenzen - ein Kommentaranfang in einem
+ * Stringliteral eroeffnete ihr einen Kommentar, der bis zum naechsten
+ * Kommentarende alles verschluckte, echte Importe eingeschlossen. Beide
+ * Male hat ein regulaerer Ausdruck so getan, als koenne er JavaScript
+ * zerlegen. Jede Lueckenschliessung riss die naechste Lueche auf.
+ *
+ * Deshalb zerlegt den Quelltext jetzt der TypeScript-Parser
+ * (`test/quelltext.ts`). TypeScript liegt ohnehin als
+ * Entwicklungsabhaengigkeit im Projekt, laeuft ausschliesslich im Testlauf,
+ * und `packages/core` bleibt unberuehrt: der Waechter liest core, er wird
+ * nicht von core geladen.
  */
-const SPECIFIER_RE = /(?:\bfrom\s*|\bimport\s*|\brequire\s*)\(?\s*['"]([^'"]+)['"]/g;
-
-/**
- * Kommentare raus, Zeilenstruktur bleibt stehen: ein Kommentar darf einen
- * Import nennen, ohne einer zu sein.
- */
-function ohneKommentare(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-}
-
 export function specifiersOf(source: string): string[] {
-  const code = ohneKommentare(source);
-  const out: string[] = [];
-  SPECIFIER_RE.lastIndex = 0;
-  let m: RegExpExecArray | null = SPECIFIER_RE.exec(code);
-  while (m !== null) {
-    out.push(m[1] as string);
-    m = SPECIFIER_RE.exec(code);
-  }
-  return out;
+  return importSpezifizierer(source);
 }
 
 function walk(dir: string): string[] {
@@ -69,7 +65,7 @@ describe('Purity von core', () => {
   });
 
   for (const file of files) {
-    it(`${file.slice(CORE_SRC.length + 1).replace(/\\/g, '/')} enthaelt keine Uhr, keinen Zufall, keinen Timer`, () => {
+    it(`${relative(CORE_SRC, file).split(sep).join('/')} enthaelt keine Uhr, keinen Zufall, keinen Timer`, () => {
       const source = readFileSync(file, 'utf8');
       const hits: string[] = [];
       source.split('\n').forEach((line, i) => {
@@ -105,14 +101,49 @@ describe('Purity von core', () => {
 
     // NR3: Ein Umbruch zwischen Schluesselwort und Spezifizierer ist eine
     // Schreibweise wie jede andere. Zeilenweise Erkennung lief hier durch.
-    expect(specifiersOf('export const load = () => import(\n  "node:crypto"\n);')).toEqual([
-      'node:crypto',
-    ]);
-    expect(specifiersOf('import {\n  randomUUID,\n} from\n  "node:crypto";')).toEqual([
-      'node:crypto',
-    ]);
+    expect(
+      specifiersOf(`export const load = () =>
+  import(
+    "node:crypto"
+  );`),
+    ).toEqual(['node:crypto']);
+    expect(
+      specifiersOf(`import {
+  randomUUID,
+} from
+  "node:crypto";`),
+    ).toEqual(['node:crypto']);
     // Auch der mehrzeilige Blockkommentar bleibt ein Kommentar.
-    expect(specifiersOf("/*\n * import 'node:crypto';\n */")).toEqual([]);
+    expect(
+      specifiersOf(`/*
+ * import 'node:crypto';
+ */`),
+    ).toEqual([]);
+
+    // B2: Ein Kommentarzeichen in einem Stringliteral ist kein Kommentar.
+    // Die ganzdateiige Kommentarentfernung las hier einen Kommentar vom
+    // ersten bis zum zweiten Literal und verschluckte den echten Import
+    // dazwischen. Einundzwanzig von einundzwanzig blieben gruen, obwohl
+    // core in der Probe wirklich node:crypto importierte.
+    expect(
+      specifiersOf(`const muster = '/*';
+import { randomUUID } from 'node:crypto';
+const ende = '*/';`),
+    ).toEqual(['node:crypto']);
+    // Dieselbe Falle mit dem Zeilenkommentar, Import auf derselben Zeile.
+    expect(specifiersOf(`const muster = '//'; import 'node:crypto';`)).toEqual(['node:crypto']);
+
+    // Die Gegenrichtung: ein Importsatz, der nur in einem Text steht, ist
+    // kein Import - weder im String noch im Template-Literal.
+    expect(specifiersOf(`const beispiel = "import 'node:crypto';";`)).toEqual([]);
+    expect(specifiersOf('const beispiel = `import "node:crypto";`;')).toEqual([]);
+
+    // Ein dynamischer Import mit Template-Literal ist dagegen einer, und
+    // `import x = require(...)` ebenfalls.
+    expect(specifiersOf('export const load = () => import(`node:crypto`);')).toEqual([
+      'node:crypto',
+    ]);
+    expect(specifiersOf(`import fs = require('node:fs');`)).toEqual(['node:fs']);
   });
 
   it('die Importpruefung findet in core ueberhaupt Importe', () => {
