@@ -145,9 +145,23 @@ describe('Beiwerk des Werkzeugs wird stillschweigend verdaut', () => {
   });
 
   it('BOM, CRLF, geschuetzte Leerzeichen und Leerzeilen am Rand', () => {
-    const roh = `﻿\r\n\r\nFrage? | 20\r\n* Merkur\r\nVenus\r\n\r\n`;
+    const roh = `﻿\r\n\r\nFrage? | 20\r\n* Mer kur\r\nVenus\r\n\r\n`;
     const erg = parseQuiz(roh);
     expect(erg.fehler).toEqual([]);
+    expect(erg.questions[0]?.prompt).toBe('Frage?');
+    // Das geschuetzte Leerzeichen steckt mitten im Antworttext. Es wegzutrimmen
+    // reicht nicht - es muss ein gewoehnliches Leerzeichen werden, sonst
+    // steht auf der Kachel ein Wort, das sich nicht umbrechen laesst.
+    expect((erg.questions[0]?.spec as ParsedSingleChoiceSpec).options[0]?.label).toBe('Mer kur');
+  });
+
+  it('auch ein alleinstehendes Wagenruecklaufzeichen trennt Zeilen', () => {
+    // Ohne diese Probe blieb die Normalisierung ungebunden: Trimmen allein
+    // raeumt BOM und CRLF schon an den Zeilenraendern weg, ein einzelnes
+    // \r mitten im Text aber nicht - dann ist die ganze Datei eine Zeile.
+    const erg = parseQuiz('Frage? | 20\r* Merkur\rVenus');
+    expect(erg.fehler).toEqual([]);
+    expect(erg.questions).toHaveLength(1);
     expect(erg.questions[0]?.prompt).toBe('Frage?');
   });
 });
