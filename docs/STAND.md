@@ -4,14 +4,14 @@
 
 ## Wo wir stehen
 
-Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, Ein-Klick-Start gebaut, **Ein-Klick-Start reviewt und die Befunde behoben**.
+Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, Ein-Klick-Start gebaut, Ein-Klick-Start reviewt und die Befunde behoben, **eigene Fragen hochladen gebaut** (noch nicht reviewt).
 
 **Selbst nachgemessen am Ende des Tages** (nicht aus Berichten übernommen):
 
 ```
-npm test        191 Tests, 21 Dateien, grün, Exit 0
+npm test        276 Tests, 26 Dateien, grün, Exit 0
 npx tsc         Exit 0  (strict: true aus tsconfig.base.json)
-npm run build   Exit 0  (Spielergerät: kritischer Pfad 63,45 kB gzip)
+npm run build   Exit 0  (Spielergerät: kritischer Pfad 63,45 kB gzip, unverändert)
 Arbeitsbaum     sauber
 ```
 
@@ -70,6 +70,22 @@ Sichtbare Folge für den Gastgeber: die Bühne heißt jetzt `http://127.0.0.1:<p
 
 Dazu unverändert: `PLAYER_HARD_CAP` steht auf 5000 — die hergeleitete Fairnessgrenze, kein Produktlimit.
 
+## Eigene Fragen hochladen — neu
+
+Jemand lässt sich von seiner KI Fragen schreiben, lädt die Ausgabe hoch, das Quiz startet. Der Autor der Datei ist ein Sprachmodell, kein tippender Mensch; danach richtet sich alles Weitere.
+
+- **Ein Parser, im Kern.** `packages/core/src/questions/parse.ts` liest das Zeilenformat und — automatisch erkannt — JSON. Nachsichtig gegen alles, was das Werkzeug beilegt: Code-Zäune, Vorwort, Schlusswort, Nummerierung, `A)`-Beschriftungen, Fettschrift, Häkchen statt Stern, typografische Anführungszeichen, BOM, CRLF, geschützte Leerzeichen. Streng bei allem, was der Autor zu verantworten hat: zwei oder keine markierte Antwort, Textlängen, Antwortzahl, Antwortzeit. Jede Meldung trägt die **Zeilennummer der Originaldatei** und lässt sich zurück in die KI kippen.
+- **Die Browser-Fassung benutzt denselben Parser.** `tools/standalone-parser.mjs` übersetzt den Kern und schreibt ihn zwischen zwei Marker in `standalone/quizbude.html`; `test/standalone/kern.test.ts` ist rot, sobald die ausgelieferte Datei nicht mehr aus dem heutigen Kern stammt — und fährt den ausgelieferten Block zusätzlich wirklich aus. Der handgeschriebene zweite Parser ist weg.
+- **Erst Prüfbericht, dann Start.** Titel, Fragenzahl, geschätzte Spieldauer (aus `ANNOUNCE_MS`, Lesefenster, Antwortzeit plus Erfahrungswerten für Auflösung und Zwischenstand) und jede beanstandete Zeile. Erst ein ausdrücklicher Klick öffnet die Lobby — die Bühne beginnt mit den Fragen, nicht mit einem Raumcode.
+- **Hochladen** per Ablegen, über eine Schaltfläche und als eingefügter Text, in beiden Fassungen. Gelesen wird **im Browser** (`FileReader`); es gibt keinen Hochladepfad im Server. Deckel: 1 MB je Datei, 200 Fragen je Sammlung, Ablehnung mit Anleitung, wenn die Datei nicht UTF-8 ist.
+- **Eine Anweisung zum Kopieren** für die eigene KI steht in der Oberfläche beider Fassungen, mit Rückfall auf Markieren, wenn die Zwischenablage abgelehnt wird.
+
+**Nicht einhaltbare Vorgabe, ausdrücklich abgewichen:** `transport/` sollte unberührt bleiben. Ohne eine Änderung in `gateway.ts` und `validate.ts` würde die Bühne aber immer die Demorunde spielen, egal was hochgeladen wird. Geändert sind 15 bzw. 22 Zeilen; die inhaltliche Prüfung liegt weiterhin in `loadQuestion`. `runtime/` ist unberührt. Begründung und Rückbauoption in `bericht-fragen-upload.md` Abschnitt 8.
+
+**Noch zu tun:** `standalone/quizbude.html` muss als Artifact **neu veröffentlicht** werden. Die verlinkte Fassung spielt sonst weiter mit dem alten Parser und ohne Hochladen.
+
+Die Proben haben drei frische Tests als wertlos entlarvt (Code-Zaun, Normalisierung, Zeilenenden) und einen echten Fehler gefunden: der Riegel verglich die Zeilenenden mit und wäre nach jedem frischen Klon auf Windows rot gewesen. Einzelheiten, 43 Rücknahmeproben mit Wortlaut, in `bericht-fragen-upload.md`.
+
 ## Offen — das Wichtigste zuerst
 
 ### 1. Zwei Restrisiken aus dem Nachreview, bewusst nicht behoben
@@ -110,7 +126,7 @@ Neben dem Durchstich liegt in `standalone/` eine eigenständige Browser-Fassung 
 
 ### 4. Zweite Welle, noch nicht begonnen
 
-Nicht im Durchstich und bewusst weggelassen: Quiz-Editor · SQLite-Persistenz · Reconnect mit Sitzungstoken · Podium · Auswertungsseite · QR-Code · Spieler entfernen · Lobby sperren · Namensfilter · Audio · weitere Fragetypen.
+Nicht im Durchstich und bewusst weggelassen: SQLite-Persistenz · Reconnect mit Sitzungstoken · Podium · Auswertungsseite · QR-Code · Spieler entfernen · Lobby sperren · Namensfilter · Audio · weitere Fragetypen.
 
 Folgeaufgaben aus Review und Fix-Wellen stehen in `review-durchstich.md`, `bericht-fixwelle.md`, `nachreview-fixwelle.md`, `bericht-fixwelle-2.md`, `nachreview-fixwelle-2.md` und `bericht-fixwelle-3.md`.
 
@@ -178,3 +194,4 @@ Zum echten Testen drei Fenster: eins als Bühne, zwei als Spieler — eins davon
 | `bericht-einklickstart.md` | Ein-Klick-Start: Doppelklick, WLAN-Adresse, Portausweichen, 18 Rücknahmeproben |
 | `review-einklickstart.md` | Unabhängiges Review des Ein-Klick-Starts: sieben Befunde, drei Mutationen an der Verdrahtung blieben grün |
 | `bericht-fixwelle-einklickstart.md` | Vierte Welle: B1–B7 und T1, Startentscheidungen in `startup.ts`, vierzehn Rücknahmeproben |
+| `bericht-fragen-upload.md` | Eigene Fragen hochladen: Format, verdautes KI-Beiwerk, ein Parser für beide Fassungen, 43 Rücknahmeproben |
