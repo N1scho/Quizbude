@@ -65,7 +65,7 @@ export function stageBanner(facts: BannerFacts): readonly string[] {
     '  das Heim-WLAN nicht.',
     '',
     `  Raeume im Speicher: ${facts.rooms}`,
-    '  Beenden mit Strg+C.',
+    '  Beenden: dieses Fenster schliessen oder Strg+C.',
     '',
   );
   return out;
