@@ -68,6 +68,12 @@ describe('Raum genau einmal je Sitzung', () => {
     );
     expect(app).toContain("createRoomOnce(wire.socket, () => wire.send({ t: 'host:create' }))");
     // Ein roher connect-Handler in der Buehne waere genau der Rueckfall.
-    expect(app).not.toMatch(/socket\.on\(\s*'connect'/);
+    //
+    // NR1: Der Waechter darf nicht an der Anfuehrungsart haengen. Das Projekt
+    // hat weder eslint noch prettier, nichts erzwingt einfache
+    // Anfuehrungszeichen - ein Rueckfall in doppelten lief frueher durch,
+    // waehrend alle vier Tests gruen blieben. `\s*` deckt zugleich den
+    // Zeilenumbruch zwischen Klammer und Ereignisnamen ab.
+    expect(app).not.toMatch(/\.on\(\s*['"`]connect['"`]/);
   });
 });
