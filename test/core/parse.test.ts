@@ -71,9 +71,19 @@ describe('Zeilenformat: der Normalfall', () => {
 
 describe('Beiwerk des Werkzeugs wird stillschweigend verdaut', () => {
   it('Code-Zaeune, auch mit Sprachangabe', () => {
+    // Nicht nur "keine Fehler": ohne das Entfernen der Zaunzeilen wird die
+    // Zaunzeile selbst zum Fragetext und die echte Frage zur Antwort - und
+    // ein Test, der nur Fehlerzahl und Fragenzahl prueft, bleibt dabei
+    // gruen. Gebunden wird deshalb, was wirklich herauskommt.
     const erg = parseQuiz('```text\n' + EINFACH + '\n```\n');
     expect(erg.fehler).toEqual([]);
     expect(erg.questions).toHaveLength(1);
+    expect(erg.questions[0]?.prompt).toBe('Welcher Planet ist der Sonne am naechsten?');
+    expect((erg.questions[0]?.spec as ParsedSingleChoiceSpec).options.map((o) => o.label)).toEqual([
+      'Merkur',
+      'Venus',
+    ]);
+    expect(erg.hinweise).toEqual([]);
   });
 
   it('ein Vorwort der KI', () => {
