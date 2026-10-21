@@ -20,6 +20,7 @@ import { browserCommand } from './runtime/browser.js';
 import { lanAddresses } from './runtime/network.js';
 import { createRuntime } from './runtime/startup.js';
 import { attachGateway } from './transport/socketio/gateway.js';
+import { MAX_SOCKET_MESSAGE_BYTES } from './transport/socketio/validate.js';
 
 const hostDir = fileURLToPath(new URL('../../../apps/host-web/dist', import.meta.url));
 const playerDir = fileURLToPath(new URL('../../../apps/player-web/dist', import.meta.url));
@@ -35,6 +36,10 @@ const io = new Server(http, {
   // Harte Betriebsvorgabe aus Konzept 6.6: eingeschaltet reserviert zlib
   // je Verbindung sechsstellige Byte-Betraege.
   perMessageDeflate: false,
+  // B3: Die Vorgabe von Socket.IO sind 1e6 Bytes - weniger, als eine
+  // erlaubte Fragendatei am Draht gross werden kann. Hergeleitet wird das
+  // Mass aus MAX_UPLOAD_BYTES; die Rechnung steht bei der Konstante.
+  maxHttpBufferSize: MAX_SOCKET_MESSAGE_BYTES,
   cors: { origin: true },
 });
 
