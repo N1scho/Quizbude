@@ -511,6 +511,51 @@ function kannFrageSein(b: RohBlock): boolean {
   return wirktWieFrage(b.promptRoh) || b.antworten.some((a) => a.markiert);
 }
 
+/**
+ * Satzzeichen, mit dem Beiwerk sich ankuendigt oder verabschiedet.
+ *
+ * Ein Sprachmodell kuendigt seine Liste an ("Hier sind deine Fragen:") und
+ * verabschiedet sich ("Klar!", "Viel Spass!"). Fragetexte und Antworten
+ * tragen keines von beiden: eine Frage endet auf ein Fragezeichen oder gar
+ * nichts, eine Antwort auf das letzte Zeichen ihres Labels.
+ */
+const BEIWERK_ZEICHEN = /[:!]$/;
+
+/** Liest sich diese Zeile wie Beiwerk und nicht wie Frage oder Antwort? */
+function wirktWieBeiwerk(text: string): boolean {
+  const t = text.trim();
+  return t !== '' && BEIWERK_ZEICHEN.test(t);
+}
+
+/**
+ * Ist dieser Block ein Vorwort - Beiwerk des Werkzeugs statt einer Frage?
+ *
+ * Zwei Bedingungen, beide notwendig:
+ *
+ * 1. Der Block kann gar keine Frage sein (`kannFrageSein`): kein
+ *    Fragezeichen, keine Zeitangabe, keine markierte Antwort.
+ * 2. **Jede** seiner Zeilen traegt ein Beiwerk-Zeichen.
+ *
+ * Die zweite Bedingung traegt den Unterschied. Die Zahl der Zeilen taugt
+ * dafuer nicht: ein dreizeiliges Vorwort hat genau so "zwei Antworten" wie
+ * eine Frage mit zwei Antworten, und ein zweizeiliges Vorwort genau so
+ * "eine Antwort" wie eine Frage mit einer. Wer nach Zeilen misst, muss
+ * eines von beiden falsch entscheiden - und hat es auch getan: erst
+ * verschwand die erste Frage still, dann liess das dreizeilige Vorwort den
+ * ganzen Upload scheitern.
+ *
+ * Tragend ist, dass eine **richtig geschriebene** Frage ihre Markierung
+ * traegt und damit nie Vorwort sein kann. Faellt die Markierung weg,
+ * entscheidet das Satzzeichen - und zwar im Zweifel laut: was kein
+ * Beiwerk-Zeichen traegt, bleibt stehen und wird von `pruefeUndBaue` mit
+ * der Zeilennummer der Originaldatei beanstandet.
+ */
+function istVorwort(b: RohBlock): boolean {
+  if (kannFrageSein(b)) return false;
+  if (!wirktWieBeiwerk(b.promptRoh)) return false;
+  return b.antworten.every((a) => wirktWieBeiwerk(a.label));
+}
+
 function zuBloecken(zeilen: readonly Zeile[]): {
   bloecke: RohBlock[];
   titel: string;
@@ -608,40 +653,41 @@ interface Beiwerk {
 
 /**
  * Vorwort und Schlusswort einer KI-Antwort sind Beiwerk, keine Frage -
- * aber nur, wenn sie am Rand stehen, kaum Zeilen haben und nicht wie eine
- * Frage aussehen. Eine Frage, der nur die Markierung fehlt, faellt
- * weiterhin laut auf: sie hat zwei oder mehr Antwortzeilen und gilt damit
- * nie als Vorwort.
+ * aber nur, wenn sie am Rand stehen und keine ihrer Zeilen wie eine Frage
+ * oder eine Antwort aussieht. Das entscheidet `istVorwort`, nicht die Zahl
+ * der Zeilen; eine Frage, der nur die Markierung fehlt, bleibt stehen und
+ * faellt mit ihrer eigenen Zeilennummer auf.
  */
 function trenneBeiwerk(bloecke: RohBlock[]): Beiwerk {
   const hinweise: string[] = [];
   const rest = bloecke.slice();
 
   // Ein mehrzeiliges Vorwort ("Klar!" / "Hier sind deine Fragen:") wird zu
-  // einem Block, dessen zweite Zeile als Antwort gilt. Die Zahl der
-  // Antworten taugt deshalb nicht allein als Massstab - dazu gehoert die
-  // Frage, ob der Block ueberhaupt eine Frage sein koennte.
+  // einem Block, dessen Folgezeilen als Antworten gelten. Gezaehlt wird
+  // deshalb nicht; gelesen wird, wie die Zeilen enden (`istVorwort`).
   //
-  // N2: Mit `kannFrageSein` allein verschwand die erste Frage still. Wer
-  // "Nenne den kleinsten Planeten" schreibt und die Markierung vergisst,
-  // hat keinen der drei Anhaltspunkte - kein Fragezeichen, keine
+  // N2 war: mit `kannFrageSein` allein verschwand die erste Frage still.
+  // Wer "Nenne den kleinsten Planeten" schreibt und die Markierung
+  // vergisst, hat keinen der drei Anhaltspunkte - kein Fragezeichen, keine
   // Zeitangabe, keine erkannte Markierung -, und der Block galt als
   // Vorwort. Der Pruefbericht meldete neun statt zehn Fragen und "Alles in
   // Ordnung"; den Hinweis "Zeile 1: als Vorwort uebersprungen" liest
-  // niemand als Verlustmeldung. Stand dieselbe Frage an zweiter Stelle,
-  // fiel sie laut auf.
+  // niemand als Verlustmeldung.
   //
-  // Beide Masse zusammen trennen sauber: ein Vorwort hat hoechstens eine
-  // Folgezeile ("Klar!" / "Hier sind deine Fragen:"), eine Frage hat
-  // mindestens zwei Antworten - sonst beanstandet `pruefeUndBaue` sie
-  // ohnehin mit eigener Zeilennummer.
-  const erste = rest[0];
-  if (
-    rest.length > 1 &&
-    erste !== undefined &&
-    !kannFrageSein(erste) &&
-    erste.antworten.length <= 1
-  ) {
+  // Die Gegenrichtung war genauso teuer: der Massstab "hoechstens eine
+  // Folgezeile" erklaerte jedes dreizeilige Vorwort zur Frage und liess
+  // den ganzen Upload scheitern - mit einer Fehlermeldung ueber dem Wort
+  // "Klar!". Beides war dieselbe Klausel, und keine Zeilenzahl trennt die
+  // beiden Faelle.
+  //
+  // Mehrere Vorwortbloecke hintereinander ("Klar!" - Leerzeile - "Hier
+  // sind deine Fragen:") fallen ebenso weg; die JSON-Tuer nimmt sie auch.
+  // Die Schleife terminiert, weil jede Runde einen Block entfernt, und der
+  // letzte Block bleibt immer stehen - eine Eingabe aus einem einzigen
+  // Block kommt nie leer heraus.
+  for (;;) {
+    const erste = rest[0];
+    if (rest.length <= 1 || erste === undefined || !istVorwort(erste)) break;
     hinweise.push(`Zeile ${erste.nr}: als Vorwort uebersprungen.`);
     rest.shift();
   }
@@ -1000,9 +1046,11 @@ function lesbaresJson(text: string): boolean {
  * beim Zeilenformat. Die Zeilennummern der Originaldatei bleiben erhalten,
  * weil `parseJson` weiter die ungekuerzte Zeilenliste bekommt.
  */
-function jsonNachBeiwerk(
-  zeilen: readonly Zeile[],
-): { readonly text: string; readonly hinweise: readonly string[] } | null {
+function jsonNachBeiwerk(zeilen: readonly Zeile[]): {
+  readonly text: string;
+  readonly hinweise: readonly string[];
+  readonly fehler: readonly ParseFehler[];
+} | null {
   let von = -1;
   for (let i = 0; i < zeilen.length; i += 1) {
     const z = zeilen[i];
@@ -1024,12 +1072,35 @@ function jsonNachBeiwerk(
     .trim();
   if (!lesbaresJson(text)) return null;
 
+  // Beide Tueren geben dieselbe Antwort. Was ueber dem JSON steht, wird
+  // genau so gelesen wie ueber einer Frage im Zeilenformat: derselbe
+  // `istVorwort`-Massstab auf denselben Bloecken. Steht dort etwas, das
+  // kein Beiwerk ist, verschwindet es nicht still - es faellt mit seiner
+  // Zeilennummer auf. Eine Titelzeile mit # wird von `zuBloecken` gar
+  // nicht erst zu einem Block und bleibt deshalb erlaubt.
+  const fehler: ParseFehler[] = [];
+  for (const b of zuBloecken(zeilen.slice(0, von)).bloecke) {
+    if (istVorwort(b)) continue;
+    fehler.push({
+      zeile: b.nr,
+      text:
+        'Ueber den Fragen steht Text, der kein Vorwort ist. Loesch ihn - ' +
+        'die Fragen stehen darunter.',
+    });
+  }
+
+  // "Als Vorwort uebersprungen" nur sagen, wenn es auch stimmt. Wer eben
+  // gelesen hat, dass dort kein Vorwort steht, soll nicht darunter den
+  // Hinweis finden, es sei eines uebersprungen worden.
   const hinweise: string[] = [];
   const vorwort = zeilen.find((z) => z.text.trim() !== '');
-  if (vorwort !== undefined) hinweise.push(`Zeile ${vorwort.nr}: als Vorwort uebersprungen.`);
+  if (vorwort !== undefined && fehler.length === 0) {
+    hinweise.push(`Zeile ${vorwort.nr}: als Vorwort uebersprungen.`);
+  }
   const schluss = zeilen.slice(bis + 1).find((z) => z.text.trim() !== '');
   if (schluss !== undefined) hinweise.push(`Zeile ${schluss.nr}: als Schlusswort uebersprungen.`);
-  return { text, hinweise };
+
+  return { text, hinweise, fehler };
 }
 
 export function parseQuiz(raw: string): ParseErgebnis {
@@ -1066,7 +1137,13 @@ export function parseQuiz(raw: string): ParseErgebnis {
   const alsJson = jsonNachBeiwerk(ohneZaun);
   if (alsJson !== null) {
     const erg = parseJson(alsJson.text, ohneZaun);
-    return { ...erg, hinweise: [...alsJson.hinweise, ...erg.hinweise] };
+    const fehler = [...alsJson.fehler, ...erg.fehler].sort((a, b) => a.zeile - b.zeile);
+    return {
+      ...erg,
+      ok: erg.ok && alsJson.fehler.length === 0,
+      fehler,
+      hinweise: [...alsJson.hinweise, ...erg.hinweise],
+    };
   }
 
   const { bloecke, titel, fehler } = zuBloecken(ohneZaun);

@@ -788,6 +788,18 @@ function wirktWieFrage(text) {
 function kannFrageSein(b) {
     return wirktWieFrage(b.promptRoh) || b.antworten.some((a) => a.markiert);
 }
+const BEIWERK_ZEICHEN = /[:!]$/;
+function wirktWieBeiwerk(text) {
+    const t = text.trim();
+    return t !== '' && BEIWERK_ZEICHEN.test(t);
+}
+function istVorwort(b) {
+    if (kannFrageSein(b))
+        return false;
+    if (!wirktWieBeiwerk(b.promptRoh))
+        return false;
+    return b.antworten.every((a) => wirktWieBeiwerk(a.label));
+}
 function zuBloecken(zeilen) {
     const bloecke = [];
     const fehler = [];
@@ -858,11 +870,10 @@ function zuBloecken(zeilen) {
 function trenneBeiwerk(bloecke) {
     const hinweise = [];
     const rest = bloecke.slice();
-    const erste = rest[0];
-    if (rest.length > 1 &&
-        erste !== undefined &&
-        !kannFrageSein(erste) &&
-        erste.antworten.length <= 1) {
+    for (;;) {
+        const erste = rest[0];
+        if (rest.length <= 1 || erste === undefined || !istVorwort(erste))
+            break;
         hinweise.push(`Zeile ${erste.nr}: als Vorwort uebersprungen.`);
         rest.shift();
     }
@@ -1187,14 +1198,25 @@ function jsonNachBeiwerk(zeilen) {
         .trim();
     if (!lesbaresJson(text))
         return null;
+    const fehler = [];
+    for (const b of zuBloecken(zeilen.slice(0, von)).bloecke) {
+        if (istVorwort(b))
+            continue;
+        fehler.push({
+            zeile: b.nr,
+            text: 'Ueber den Fragen steht Text, der kein Vorwort ist. Loesch ihn - ' +
+                'die Fragen stehen darunter.',
+        });
+    }
     const hinweise = [];
     const vorwort = zeilen.find((z) => z.text.trim() !== '');
-    if (vorwort !== undefined)
+    if (vorwort !== undefined && fehler.length === 0) {
         hinweise.push(`Zeile ${vorwort.nr}: als Vorwort uebersprungen.`);
+    }
     const schluss = zeilen.slice(bis + 1).find((z) => z.text.trim() !== '');
     if (schluss !== undefined)
         hinweise.push(`Zeile ${schluss.nr}: als Schlusswort uebersprungen.`);
-    return { text, hinweise };
+    return { text, hinweise, fehler };
 }
 function parseQuiz(raw) {
     const text = normalisiereText(raw);
@@ -1224,7 +1246,13 @@ function parseQuiz(raw) {
     const alsJson = jsonNachBeiwerk(ohneZaun);
     if (alsJson !== null) {
         const erg = parseJson(alsJson.text, ohneZaun);
-        return { ...erg, hinweise: [...alsJson.hinweise, ...erg.hinweise] };
+        const fehler = [...alsJson.fehler, ...erg.fehler].sort((a, b) => a.zeile - b.zeile);
+        return {
+            ...erg,
+            ok: erg.ok && alsJson.fehler.length === 0,
+            fehler,
+            hinweise: [...alsJson.hinweise, ...erg.hinweise],
+        };
     }
     const { bloecke, titel, fehler } = zuBloecken(ohneZaun);
     const getrennt = trenneBeiwerk(bloecke);

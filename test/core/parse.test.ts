@@ -315,6 +315,106 @@ describe('Vorwort und Titelzeile zusammen (B5)', () => {
   });
 });
 
+describe('Vorwort beliebiger Laenge, keine stille erste Frage (B-1/B-2)', () => {
+  /**
+   * B-1 und B-2 waren dieselbe Klausel und zogen gegeneinander. Der
+   * Massstab "ein Vorwort hat hoechstens eine Folgezeile" schuetzte die
+   * erste Frage mit zwei Antworten und erklaerte dafuer jedes dreizeilige
+   * Vorwort zur Frage: der Nutzer las "keine Antwort markiert" ueber dem
+   * Wort "Klar!". Keine Zeilenzahl trennt die beiden Faelle - ein
+   * dreizeiliges Vorwort hat genau so zwei Antwortzeilen wie eine Frage
+   * mit zwei Antworten. Gemessen wird deshalb, wie die Zeilen enden.
+   *
+   * Die Zusage steht in drei Teilen: das Zeilenformat, die JSON-Tuer, und
+   * dass beide bei derselben Eingabe dasselbe sagen.
+   */
+  const ZEILENFRAGE = 'Welcher Planet ist rot? | 20\n* Mars\nVenus';
+  const JSONFRAGE = [
+    '```json',
+    '{"fragen":[{"frage":"Welcher Planet ist rot?","sekunden":20,' +
+      '"antworten":["*Mars","Venus"]}]}',
+    '```',
+  ].join('\n');
+
+  /** Kopf der Eingabe, und ob er Beiwerk ist oder laut auffallen muss. */
+  const koepfe: readonly (readonly [string, string, boolean])[] = [
+    ['Vorwort, eine Zeile', 'Hier sind deine Fragen:', true],
+    ['Vorwort, zwei Zeilen', 'Klar!\nHier sind deine Fragen:', true],
+    ['Vorwort, drei Zeilen', 'Klar!\nHier sind deine Fragen:\nViel Spass!', true],
+    [
+      'Vorwort, fuenf Zeilen',
+      'Klar!\nGerne doch!\nHier sind deine Fragen:\nViel Spass!\nLos geht es:',
+      true,
+    ],
+    ['Vorwort in zwei Bloecken', 'Klar!\n\nHier sind deine Fragen:', true],
+    ['erste Frage, eine Antwortzeile', 'Nenne den kleinsten Planeten\nMerkur', false],
+    ['erste Frage, keine Antwortzeile', 'Nenne den kleinsten Planeten', false],
+    ['erste Frage, zwei Antwortzeilen', 'Nenne den kleinsten Planeten\nMerkur\nVenus', false],
+  ];
+
+  it('das dreizeilige Vorwort des Nachreviews, woertlich (B-1)', () => {
+    // Genau die Eingabe, an der das Nachreview den Regress gemessen hat.
+    const erg = parseQuiz(
+      'Klar!\nHier sind deine Fragen:\nViel Spass!\n\nWelcher Planet ist rot? | 20\n* Mars\nVenus',
+    );
+    expect(erg.ok).toBe(true);
+    expect(erg.fehler).toEqual([]);
+    expect(erg.questions.map((q) => q.prompt)).toEqual(['Welcher Planet ist rot?']);
+    expect(erg.hinweise).toEqual(['Zeile 1: als Vorwort uebersprungen.']);
+  });
+
+  it('eine erste Frage mit einer einzigen Antwortzeile faellt laut (B-2)', () => {
+    // Vorher: ok=true, eine Frage weniger, nur ein Hinweis. Derselbe Block
+    // an zweiter Stelle fiel laut auf - genau diese Asymmetrie ist weg.
+    const erg = parseQuiz(`Nenne den kleinsten Planeten\nMerkur\n\n${ZEILENFRAGE}`);
+    expect(erg.ok).toBe(false);
+    expect(erg.questions).toHaveLength(2);
+    expect(erg.hinweise.join(' ')).not.toContain('Vorwort');
+    expect(erg.fehler.map((f) => `${f.zeile}: ${f.text}`)).toEqual([
+      '1: Diese Frage hat nur eine Antwort. Es muessen zwei bis vier sein.',
+      '1: keine Antwort markiert, genau eine muss es sein. Setz ein * vor die richtige.',
+    ]);
+  });
+
+  it('im Zeilenformat: Vorwort jeder Laenge bleibt Vorwort, eine Frage bleibt Frage', () => {
+    for (const [name, kopf, istBeiwerk] of koepfe) {
+      const erg = parseQuiz(`${kopf}\n\n${ZEILENFRAGE}`);
+      expect(erg.ok, name).toBe(istBeiwerk);
+      if (istBeiwerk) {
+        expect(erg.fehler, name).toEqual([]);
+        expect(erg.questions.map((q) => q.prompt), name).toEqual(['Welcher Planet ist rot?']);
+        expect(erg.hinweise.join(' '), name).toContain('Vorwort');
+      } else {
+        // Nicht still: der Block bleibt eine Frage und traegt seine
+        // eigene Zeilennummer in der Meldung.
+        expect(erg.questions, name).toHaveLength(2);
+        expect(erg.hinweise.join(' '), name).not.toContain('Vorwort');
+        expect(erg.fehler.map((f) => f.zeile), name).toContain(1);
+      }
+    }
+  });
+
+  it('die JSON-Tuer entscheidet dieselben Koepfe gleich', () => {
+    for (const [name, kopf, istBeiwerk] of koepfe) {
+      const zeilen = parseQuiz(`${kopf}\n\n${ZEILENFRAGE}`);
+      const json = parseQuiz(`${kopf}\n\n${JSONFRAGE}`);
+      // Dieselbe Eingabe, zwei Tueren, dieselbe Antwort. Vorher waren sie
+      // bei drei der acht Koepfe verschiedener Meinung.
+      expect(json.quelle, name).toBe('json');
+      expect(json.ok, name).toBe(zeilen.ok);
+      expect(json.ok, name).toBe(istBeiwerk);
+      if (istBeiwerk) {
+        expect(json.fehler, name).toEqual([]);
+        expect(json.questions.map((q) => q.prompt), name).toEqual(['Welcher Planet ist rot?']);
+        expect(json.hinweise.join(' '), name).toContain('Vorwort');
+      } else {
+        expect(json.fehler.map((f) => f.zeile), name).toContain(1);
+        expect(json.hinweise.join(' '), name).not.toContain('Vorwort');
+      }
+    }
+  });
+});
+
 describe('Die Nachsichten gekreuzt, nicht aufgezaehlt (B1/B6)', () => {
   /**
    * Jede Nachsicht fuer sich war getestet und funktionierte; die
