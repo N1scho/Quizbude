@@ -541,6 +541,7 @@ const MIN_ANSWER_SECONDS = 5;
 const MAX_ANSWER_SECONDS = 300;
 const DEFAULT_ANSWER_SECONDS = 20;
 const MAX_QUESTIONS = 200;
+const MAX_TITLE_CHARS = 256;
 const MAX_UPLOAD_BYTES = 1000000;
 const ESTIMATE_REVEAL_MS = 8000;
 const ESTIMATE_SCOREBOARD_MS = 7000;
@@ -812,6 +813,13 @@ function zuBloecken(zeilen) {
             (aktuell === null || !kannFrageSein(aktuell))) {
             schliessen();
             const t = entferneAuszeichnung(text.replace(/^#+\s*/, '')).trim();
+            if (t.length > MAX_TITLE_CHARS) {
+                fehler.push({
+                    zeile: zeile.nr,
+                    text: `Der Titel hat ${t.length} Zeichen, erlaubt sind ${MAX_TITLE_CHARS}. ` +
+                        `Kuerz ihn um ${t.length - MAX_TITLE_CHARS} Zeichen.`,
+                });
+            }
             if (t !== '')
                 titel = t;
             titelErlaubt = false;
@@ -1044,6 +1052,13 @@ function parseJson(text, zeilen) {
     }
     const titelRoh = wurzel === null ? undefined : erstesFeld(wurzel, ['titel', 'title', 'name']);
     const titel = typeof titelRoh === 'string' && titelRoh.trim() !== '' ? titelRoh.trim() : 'Quizbude';
+    if (titel.length > MAX_TITLE_CHARS) {
+        fehler.push({
+            zeile: zeileFuer(zeilen, titel),
+            text: `Der Titel hat ${titel.length} Zeichen, erlaubt sind ${MAX_TITLE_CHARS}. ` +
+                `Kuerz ihn um ${titel.length - MAX_TITLE_CHARS} Zeichen.`,
+        });
+    }
     const bloecke = [];
     rohFragen.forEach((roh, i) => {
         if (!isRecord(roh)) {
@@ -1281,6 +1296,7 @@ const DEMO_TEXT = [
     MAX_OPTION_CHARS: MAX_OPTION_CHARS,
     MAX_PROMPT_CHARS: MAX_PROMPT_CHARS,
     MAX_QUESTIONS: MAX_QUESTIONS,
+    MAX_TITLE_CHARS: MAX_TITLE_CHARS,
     MAX_UPLOAD_BYTES: MAX_UPLOAD_BYTES,
     MIN_ANSWER_SECONDS: MIN_ANSWER_SECONDS,
     PLAYER_HARD_CAP: PLAYER_HARD_CAP,

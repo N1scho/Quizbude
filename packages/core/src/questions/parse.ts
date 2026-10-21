@@ -36,6 +36,18 @@ export const DEFAULT_ANSWER_SECONDS = 20;
 /** Obergrenze fuer eine Sammlung. Jenseits davon haengt die Oberflaeche. */
 export const MAX_QUESTIONS = 200;
 
+/**
+ * Obergrenze fuer den Titel einer Sammlung (B4).
+ *
+ * Dieselbe Zahl gilt am Transportrand des Servers; `validate.ts` bindet
+ * sich an diese Konstante, statt sie ein zweites Mal zu fuehren. Ein
+ * laengerer Titel kam frueher durch den Pruefbericht ("Alles in Ordnung"),
+ * wurde am Transportrand stillschweigend verworfen, und die Buehne hing
+ * ohne ein Wort in "Buehne verbindet sich ...". Wer hier etwas aendert,
+ * aendert beide Seiten - `test/server/validate.test.ts` bricht sonst.
+ */
+export const MAX_TITLE_CHARS = 256;
+
 /** Obergrenze fuer eine hochgeladene Datei in Bytes. */
 export const MAX_UPLOAD_BYTES = 1_000_000;
 
@@ -526,6 +538,14 @@ function zuBloecken(zeilen: readonly Zeile[]): {
       // Frage zur Antwort des Vorworts darueber.
       schliessen();
       const t = entferneAuszeichnung(text.replace(/^#+\s*/, '')).trim();
+      if (t.length > MAX_TITLE_CHARS) {
+        fehler.push({
+          zeile: zeile.nr,
+          text:
+            `Der Titel hat ${t.length} Zeichen, erlaubt sind ${MAX_TITLE_CHARS}. ` +
+            `Kuerz ihn um ${t.length - MAX_TITLE_CHARS} Zeichen.`,
+        });
+      }
       if (t !== '') titel = t;
       titelErlaubt = false;
       continue;
@@ -807,6 +827,14 @@ function parseJson(text: string, zeilen: readonly Zeile[]): ParseErgebnis {
 
   const titelRoh = wurzel === null ? undefined : erstesFeld(wurzel, ['titel', 'title', 'name']);
   const titel = typeof titelRoh === 'string' && titelRoh.trim() !== '' ? titelRoh.trim() : 'Quizbude';
+  if (titel.length > MAX_TITLE_CHARS) {
+    fehler.push({
+      zeile: zeileFuer(zeilen, titel),
+      text:
+        `Der Titel hat ${titel.length} Zeichen, erlaubt sind ${MAX_TITLE_CHARS}. ` +
+        `Kuerz ihn um ${titel.length - MAX_TITLE_CHARS} Zeichen.`,
+    });
+  }
 
   const bloecke: RohBlock[] = [];
   rohFragen.forEach((roh: unknown, i: number) => {

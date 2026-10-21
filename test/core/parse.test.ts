@@ -5,6 +5,7 @@ import {
   MAX_OPTION_CHARS,
   MAX_PROMPT_CHARS,
   MAX_QUESTIONS,
+  MAX_TITLE_CHARS,
   ESTIMATE_REVEAL_MS,
   ESTIMATE_SCOREBOARD_MS,
   createDefaultRegistry,
@@ -453,6 +454,34 @@ describe('Inhaltsfehler werden laut, mit Zeilennummer', () => {
     const block = 'Frage? | 20\n* A\nB';
     const viele = Array.from({ length: MAX_QUESTIONS + 1 }, () => block).join('\n\n');
     expect(meldungen(viele)[0]).toContain(`Mehr als ${MAX_QUESTIONS}`);
+  });
+
+  it('ein zu langer Titel, mit Zeilennummer (B4)', () => {
+    // Vorher gruen geprueft und danach stillschweigend verworfen: der
+    // Transportrand nimmt hoechstens MAX_TITLE_CHARS Zeichen, meldet das
+    // aber nicht zurueck - die Buehne hing in "verbindet sich ...".
+    const lang = 'A'.repeat(MAX_TITLE_CHARS + 44);
+    const erg = parseQuiz(`# ${lang}\n\nFrage? | 20\n* A\nB`);
+    expect(erg.ok).toBe(false);
+    expect(erg.fehler[0]?.zeile).toBe(1);
+    expect(erg.fehler[0]?.text).toContain(`${MAX_TITLE_CHARS + 44} Zeichen`);
+    expect(erg.fehler[0]?.text).toContain(`erlaubt sind ${MAX_TITLE_CHARS}`);
+    expect(erg.fehler[0]?.text).toContain('Kuerz ihn um 44');
+  });
+
+  it('genau MAX_TITLE_CHARS Zeichen Titel gehen noch durch', () => {
+    const erg = parseQuiz(`# ${'A'.repeat(MAX_TITLE_CHARS)}\n\nFrage? | 20\n* A\nB`);
+    expect(erg.fehler).toEqual([]);
+    expect(erg.titel).toHaveLength(MAX_TITLE_CHARS);
+  });
+
+  it('die Titelgrenze gilt auch im JSON', () => {
+    const lang = 'A'.repeat(MAX_TITLE_CHARS + 1);
+    const erg = parseQuiz(
+      JSON.stringify({ titel: lang, fragen: [{ frage: 'F?', antworten: ['*A', 'B'] }] }),
+    );
+    expect(erg.ok).toBe(false);
+    expect(erg.fehler.map((f) => f.text).join(' ')).toContain(`erlaubt sind ${MAX_TITLE_CHARS}`);
   });
 
   it('leerer Text', () => {

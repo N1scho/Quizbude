@@ -1,4 +1,4 @@
-import { MAX_QUESTIONS } from '@quizbude/core';
+import { MAX_QUESTIONS, MAX_TITLE_CHARS } from '@quizbude/core';
 import type { ClientMessage, Phase, QuizPayload } from '@quizbude/protocol';
 
 /**
@@ -40,6 +40,17 @@ function isShortString(value: unknown): value is string {
   return typeof value === 'string' && value.length <= MAX_FIELD_CHARS;
 }
 
+/**
+ * Der Titel einer Sammlung - gegen dieselbe Konstante wie im Parser (B4).
+ *
+ * Die Zahl darf nicht zweimal unabhaengig im Baum stehen: ein Titel, den
+ * der Pruefbericht gruen laesst, aber der Transportrand verwirft, laesst
+ * die Buehne ohne ein Wort haengen. `MAX_QUESTIONS` kommt denselben Weg.
+ */
+function isTitle(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= MAX_TITLE_CHARS;
+}
+
 /** Ganzzahl im sicheren Bereich. Schliesst NaN, Infinity und Brueche aus. */
 function isIndex(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value);
@@ -61,7 +72,7 @@ function parseQuizPayload(raw: unknown): QuizPayload | null {
   if (!isRecord(raw)) return null;
   const title = raw['title'];
   const questions = raw['questions'];
-  if (!isShortString(title)) return null;
+  if (!isTitle(title)) return null;
   if (!Array.isArray(questions)) return null;
   if (questions.length < 1 || questions.length > MAX_QUESTIONS) return null;
   return { title, questions };

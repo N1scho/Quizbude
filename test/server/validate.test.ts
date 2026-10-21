@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_QUESTIONS } from '@quizbude/core';
+import { MAX_QUESTIONS, MAX_TITLE_CHARS, parseQuiz } from '@quizbude/core';
 import { parseClientMessage } from '../../packages/server/src/transport/socketio/validate.js';
 
 /** B2: Jede Nachrichtenform wird vollstaendig geprueft, nicht nur ihr Feld `t`. */
@@ -102,6 +102,33 @@ describe('host:create mit hochgeladener Sammlung', () => {
       { t: 'host:create', quiz: { title: 'A'.repeat(257), questions: [frage] } },
     ];
     for (const payload of kaputt) expect(parseClientMessage(payload), JSON.stringify(payload)).toBeNull();
+  });
+
+  it('nimmt genau den Titel an, den der Parser gruen prueft (B4)', () => {
+    // Die Zahl steht nur einmal im Baum. Laufen Parser und Transportrand
+    // auseinander, haengt die Buehne ohne ein Wort: der Pruefbericht sagt
+    // "Alles in Ordnung", `parseClientMessage` gibt null, und es kommt
+    // weder `room:created` noch `room:error`. Deshalb beides hier an
+    // EINER Grenze gemessen.
+    const gerade = `# ${'A'.repeat(MAX_TITLE_CHARS)}\n\nFrage? | 20\n* A\nB`;
+    const ergGerade = parseQuiz(gerade);
+    expect(ergGerade.ok).toBe(true);
+    expect(
+      parseClientMessage({
+        t: 'host:create',
+        quiz: { title: ergGerade.titel, questions: ergGerade.questions },
+      }),
+    ).not.toBeNull();
+
+    // Ein Zeichen mehr: der Parser schlaegt an, BEVOR etwas gesendet wird.
+    const zuviel = `# ${'A'.repeat(MAX_TITLE_CHARS + 1)}\n\nFrage? | 20\n* A\nB`;
+    expect(parseQuiz(zuviel).ok).toBe(false);
+    expect(
+      parseClientMessage({
+        t: 'host:create',
+        quiz: { title: 'A'.repeat(MAX_TITLE_CHARS + 1), questions: [frage] },
+      }),
+    ).toBeNull();
   });
 
   it('deckelt die Fragenzahl - eine Million Fragen sind kein Quiz, sondern eine Last', () => {
