@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { WIRE_CHANNEL } from '@quizbude/protocol';
 import { MAX_UPLOAD_BYTES, parseQuiz } from '@quizbude/core';
+import { createSocketServer } from '../../packages/server/src/transport/socketio/server.js';
 import {
   MAX_SOCKET_MESSAGE_BYTES,
   WIRE_ESCAPE_FACTOR,
@@ -90,16 +91,24 @@ describe('Der Puffer am Draht traegt jede erlaubte Datei (B3)', () => {
     expect(JSON.stringify('\u0001')).toHaveLength('"\\u0001"'.length);
   });
 
-  it('main.ts setzt den Puffer wirklich, und zwar aus dieser Konstante', () => {
-    // `main.ts` ist reine Verdrahtung und von keinem Verhaltenstest
-    // beruehrt - genau dort ist in diesem Projekt schon einmal eine
-    // Entscheidung unbemerkt verschwunden.
+  it('main.ts baut keinen eigenen Socket-Server mehr, sondern nimmt den gebundenen', () => {
+    // N3: Der Waechter stand frueher auf dem Wortlaut
+    // `maxHttpBufferSize: MAX_SOCKET_MESSAGE_BYTES` in `main.ts`. Er hielt
+    // genau so lange, wie der Text dort stand - EINE Zeile dahinter
+    // (`io.engine.opts.maxHttpBufferSize = 1e6;`) stellte B3 vollstaendig
+    // wieder her, bei 309/309 gruen und `tsc` Exit 0.
+    //
+    // Die Masse stehen jetzt in `transport/socketio/server.ts` und sind
+    // unten am laufenden Server gebunden. Hier bleibt die kleine Frage:
+    // nimmt `main.ts` wirklich den gebundenen Server? Alles Weitere traegt
+    // das Typsystem - ohne ein `io` im Gueltigkeitsbereich gibt es dort
+    // nichts mehr, worauf sich eine solche Zeile stuetzen koennte.
     const quelle = readFileSync(
       fileURLToPath(new URL('../../packages/server/src/main.ts', import.meta.url)),
       'utf8',
     );
-    expect(quelle).toContain('maxHttpBufferSize: MAX_SOCKET_MESSAGE_BYTES');
-    expect(quelle).toContain("from './transport/socketio/validate.js'");
+    expect(quelle).toContain('attachGateway(createSocketServer(http))');
+    expect(quelle).not.toContain('new Server(');
   });
 });
 
@@ -108,13 +117,19 @@ interface Probe {
   close(): Promise<void>;
 }
 
-/** Ein echter Socket.IO-Server mit genau diesem Puffer - mehr nicht. */
-async function schicke(puffer: number | undefined, nutzlast: unknown): Promise<Probe> {
+/** Der wirksame Puffer eines laufenden Servers, nicht die Konstante dahinter. */
+function wirksamerPuffer(io: Server): number {
+  return (io.engine as unknown as { opts: { maxHttpBufferSize: number } }).opts
+    .maxHttpBufferSize;
+}
+
+/** Ein echter Socket.IO-Server, gebaut wie angegeben - mehr nicht. */
+async function schicke(
+  bauen: (http: HttpServer) => Server,
+  nutzlast: unknown,
+): Promise<Probe & { readonly puffer: number }> {
   const http: HttpServer = createServer();
-  const io = new Server(http, {
-    perMessageDeflate: false,
-    ...(puffer === undefined ? {} : { maxHttpBufferSize: puffer }),
-  });
+  const io = bauen(http);
   io.on('connection', (socket) => {
     socket.on(WIRE_CHANNEL, () => socket.emit(WIRE_CHANNEL, { t: 'angekommen' }));
   });
@@ -145,6 +160,7 @@ async function schicke(puffer: number | undefined, nutzlast: unknown): Promise<P
 
   return {
     ergebnis,
+    puffer: wirksamerPuffer(io),
     async close(): Promise<void> {
       client.close();
       await io.close();
@@ -167,14 +183,58 @@ describe('Am echten Draht gemessen', () => {
   const nutzlast = { t: 'host:create', quiz: { title: erg.titel, questions: erg.questions } };
 
   it('mit der Vorgabe von Socket.IO reisst eine erlaubte Datei die Verbindung ab', async () => {
-    const probe = await schicke(undefined, nutzlast);
+    const probe = await schicke((h) => new Server(h, { perMessageDeflate: false }), nutzlast);
     offen = probe;
     expect(await probe.ergebnis).toBe('getrennt');
   }, 15_000);
 
   it('mit dem gesetzten Puffer kommt dieselbe Datei an', async () => {
-    const probe = await schicke(MAX_SOCKET_MESSAGE_BYTES, nutzlast);
+    const probe = await schicke(
+      (h) => new Server(h, { perMessageDeflate: false, maxHttpBufferSize: MAX_SOCKET_MESSAGE_BYTES }),
+      nutzlast,
+    );
     offen = probe;
     expect(await probe.ergebnis).toBe('angekommen');
   }, 15_000);
+});
+
+/**
+ * N3: Die beiden Proben oben bauen ihren Server selbst. Sie belegen, dass
+ * die ZAHL taugt - nicht, dass der Server, den der Abend wirklich
+ * hochfaehrt, sie auch traegt. Das hing bis hierher an einem Textschnipsel
+ * in `main.ts`: eine Zeile dahinter, und der Puffer stand wieder auf der
+ * Vorgabe von Socket.IO, waehrend alle Tore schwiegen.
+ *
+ * Gemessen wird deshalb der Server aus `createSocketServer` - derselbe, den
+ * `main.ts` nimmt und den das Harness aller Transporttests nimmt - und
+ * zwar nicht an seiner Konstanten, sondern an dem, was engine.io daraus
+ * gemacht hat, plus einer echten Nachricht ueber einen echten Draht.
+ */
+describe('Der Server, den der Abend hochfaehrt (N3)', () => {
+  // Die unguenstigste erlaubte Datei, nicht die freundliche: ein
+  // Steuerzeichen ist ein Byte in der Datei und sechs am Draht.
+  const erg = parseQuiz(dateiNahAmDeckel(''));
+  const nutzlast = { t: 'host:create', quiz: { title: erg.titel, questions: erg.questions } };
+
+  it('traegt den Puffer wirklich - gemessen an engine.io, nicht an der Konstante', async () => {
+    const probe = await schicke(createSocketServer, nutzlast);
+    offen = probe;
+    // Erst das Verhalten: eine echte Nachricht ueber einen echten Draht.
+    expect(await probe.ergebnis).toBe('angekommen');
+    expect(probe.puffer).toBe(MAX_SOCKET_MESSAGE_BYTES);
+  }, 20_000);
+
+  it('und die Messung wuerde es merken, wenn ihn jemand hinter dem Aufbau herunterdreht', async () => {
+    // Die Gegenprobe zur Messung selbst: genau die Zeile, die beim
+    // Nachreview 309/309 gruen liess. Sie darf hier nicht durchgehen -
+    // weder am abgelesenen Puffer noch am echten Draht.
+    const probe = await schicke((h) => {
+      const io = createSocketServer(h);
+      (io.engine as unknown as { opts: { maxHttpBufferSize: number } }).opts.maxHttpBufferSize = 1e6;
+      return io;
+    }, nutzlast);
+    offen = probe;
+    expect(await probe.ergebnis).toBe('getrennt');
+    expect(probe.puffer).toBe(1e6);
+  }, 20_000);
 });

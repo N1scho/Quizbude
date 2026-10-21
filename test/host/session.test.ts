@@ -207,9 +207,19 @@ describe('Raum genau einmal je Sitzung', () => {
     );
     expect(app).toContain("wire.send({ t: 'host:create', quiz })");
     expect(app).toContain('createRoomOnce<QuizPayload>(');
-    // B2: Ohne diesen Ruf ist der ganze room:error-Pfad folgenlos - der
-    // Nutzer aendert etwas, klickt, und nichts wird gesendet.
-    expect(app).toContain('oeffne.current?.abgelehnt()');
+    // B2/N3: Hier stand `expect(app).toContain('oeffne.current?.abgelehnt()')`.
+    // Der Waechter hielt genau so lange, wie der Text dort stand - das
+    // Nachreview hat die Zeile woertlich stehen lassen und tot gemacht
+    // (`if (message.code === 'niemals') ...`): 309/309 gruen, tsc Exit 0,
+    // der ganze room:error-Pfad wieder folgenlos. Und nach dem Umbau faende
+    // derselbe Waechter seinen Text sogar im Kommentar ueber `verdrahte`.
+    //
+    // Gebunden ist der Pfad jetzt am Verhalten:
+    // `test/host/wire.test.ts` > "Die verdrahtete Buehne (B2/N3)" schickt
+    // ein echtes `room:error` ueber den Kanal und zaehlt, was danach auf die
+    // Leitung geht. Hier bleibt nur die Frage, ob die Komponente ueberhaupt
+    // durch die gebundene Verdrahtung geht.
+    expect(app).toContain('verdrahte({');
     // Ein roher connect-Handler in der Buehne waere genau der Rueckfall.
     //
     // NR1: Der Waechter darf nicht an der Anfuehrungsart haengen. Das Projekt

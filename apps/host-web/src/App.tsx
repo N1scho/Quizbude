@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type {
+  ClientMessage,
   Phase,
   PublicQuestionView,
   QuizPayload,
@@ -8,13 +9,13 @@ import type {
   RosterEntry,
   ServerMessage,
 } from '@quizbude/protocol';
-import { connect, type Wire } from './wire';
-import { createRoomOnce, type RoomSession } from './session';
+import { connect } from './wire';
+import { createRoomOnce } from './session';
 import { Shape, slotFor } from './shapes';
 import { istWeiterTaste } from './tasten';
 import { Upload } from './Upload';
 
-type Stage =
+export type Stage =
   /** Vor allem anderen: die Fragen. Ohne sie gibt es keinen Raum. */
   | { k: 'upload' }
   | { k: 'connecting' }
@@ -47,105 +48,165 @@ type Stage =
 /** Rund 25 Kacheln passen in lesbarer Größe auf die Bühne (UX 1.1/B3). */
 const NAME_TILE_LIMIT = 25;
 
+/** Was die Verdrahtung an der Oberfläche zu melden hat. */
+export interface Buehnenansicht {
+  readonly stage: (stage: Stage) => void;
+  readonly code: (code: string) => void;
+  readonly roster: (roster: readonly RosterEntry[]) => void;
+  readonly antworten: (stand: { answered: number; expected: number }) => void;
+  readonly serverfehler: (meldung: string | null) => void;
+  readonly bereit: () => void;
+}
+
+/** Was die Oberfläche mit der Verdrahtung tun kann. */
+export interface Buehnenleitung {
+  /** Die Runde eröffnen - oder darauf warten, dass die Leitung steht. */
+  starte(quiz: QuizPayload): void;
+  send(message: ClientMessage): void;
+  /** Gemeinsame Serveruhr in Millisekunden. */
+  serverNow(): number;
+  dispose(): void;
+}
+
+/**
+ * Leitung, Raumsitzung und Serverantworten in einem Stück.
+ *
+ * N3: Das stand im `useEffect` der Komponente, und damit war es von keinem
+ * Verhaltenstest erreichbar - ohne DOM rendert dieses Projekt nur statisch
+ * (`renderToStaticMarkup`), und dabei läuft kein Effekt. Gebunden war der
+ * `room:error`-Pfad deshalb nur dadurch, dass der Text
+ * `oeffne.current?.abgelehnt()` in dieser Datei vorkam. Die Zeile wörtlich
+ * stehen zu lassen und tot zu machen
+ * (`if (message.code === 'niemals') oeffne.current?.abgelehnt();`) hielt den
+ * Wächter zufrieden und brachte B2 vollständig zurück: der Nutzer kommt
+ * zurück auf den Fragen-Bildschirm, ändert etwas, klickt - und nichts geht
+ * hinaus.
+ *
+ * Hier ist dieselbe Verdrahtung ein Stück Code, das ein Test hochfahren
+ * kann (`test/host/wire.test.ts`). Die Komponente hält nur noch den Verweis
+ * darauf.
+ */
+export function verdrahte(ansicht: Buehnenansicht): Buehnenleitung {
+  // `sitzung` steht weiter unten und wird hier oben schon benutzt. Das
+  // traegt, weil dieser Rückruf erst laufen kann, wenn eine Serverantwort
+  // eintrifft - und die frühestens, nachdem dieser Block zu Ende ist.
+  const wire = connect((message: ServerMessage) => {
+    switch (message.t) {
+      case 'room:created':
+        ansicht.code(message.roomCode);
+        ansicht.stage({ k: 'lobby' });
+        return;
+      case 'room:roster':
+        ansicht.roster(message.players);
+        return;
+      case 'stage:question_prepared':
+        ansicht.antworten({ answered: 0, expected: 0 });
+        ansicht.stage({
+          k: 'question',
+          q: message.question,
+          announceUntil: message.announceUntil,
+          answersOpenAt: message.answersOpenAt,
+          answersCloseAt: message.answersCloseAt,
+        });
+        return;
+      case 'room:answer_count':
+        ansicht.antworten({ answered: message.answered, expected: message.expected });
+        return;
+      case 'stage:reveal':
+        ansicht.stage({
+          k: 'reveal',
+          q: message.question,
+          reveal: message.reveal,
+          answerCount: message.answerCount,
+          correctCount: message.correctCount,
+          playerCount: message.playerCount,
+        });
+        return;
+      case 'stage:scoreboard':
+        ansicht.stage({
+          k: 'scoreboard',
+          afterSeq: message.afterSeq,
+          top: message.top,
+          othersCount: message.othersCount,
+          hasNext: message.hasNextQuestion,
+        });
+        return;
+      case 'stage:podium':
+        ansicht.stage({ k: 'podium', ranking: message.ranking });
+        return;
+      case 'room:finished':
+        ansicht.stage({ k: 'finished' });
+        return;
+      case 'room:error':
+        // Der Server hat die Sammlung abgelehnt. Zurueck zum Bildschirm,
+        // auf dem der Nutzer etwas daran aendern kann - und der Riegel
+        // wird geloest, sonst bliebe dieser ganze Pfad folgenlos (B2).
+        sitzung.abgelehnt();
+        ansicht.serverfehler(message.message);
+        ansicht.stage({ k: 'upload' });
+        return;
+      default:
+        return;
+    }
+  });
+
+  const sitzung = createRoomOnce<QuizPayload>(
+    wire.socket,
+    (quiz) => wire.send({ t: 'host:create', quiz }),
+    () => ansicht.bereit(),
+  );
+
+  return {
+    starte: (quiz: QuizPayload): void => {
+      ansicht.serverfehler(null);
+      ansicht.stage({ k: 'connecting' });
+      sitzung.oeffne(quiz);
+    },
+    send: (message: ClientMessage): void => wire.send(message),
+    serverNow: (): number => wire.serverNow(),
+    dispose: (): void => wire.dispose(),
+  };
+}
+
 export function App(): JSX.Element {
   const [stage, setStage] = useState<Stage>({ k: 'upload' });
   const [bereit, setBereit] = useState(false);
   const [serverfehler, setServerfehler] = useState<string | null>(null);
-  const oeffne = useRef<RoomSession<QuizPayload> | null>(null);
+  const leitung = useRef<Buehnenleitung | null>(null);
   const [code, setCode] = useState<string>('');
   const [roster, setRoster] = useState<readonly RosterEntry[]>([]);
   const [answered, setAnswered] = useState<{ answered: number; expected: number }>({
     answered: 0,
     expected: 0,
   });
-  const wireRef = useRef<Wire | null>(null);
   const [now, setNow] = useState(0);
 
   useEffect(() => {
-    const wire = connect((message: ServerMessage) => {
-      switch (message.t) {
-        case 'room:created':
-          setCode(message.roomCode);
-          setStage({ k: 'lobby' });
-          return;
-        case 'room:roster':
-          setRoster(message.players);
-          return;
-        case 'stage:question_prepared':
-          setAnswered({ answered: 0, expected: 0 });
-          setStage({
-            k: 'question',
-            q: message.question,
-            announceUntil: message.announceUntil,
-            answersOpenAt: message.answersOpenAt,
-            answersCloseAt: message.answersCloseAt,
-          });
-          return;
-        case 'room:answer_count':
-          setAnswered({ answered: message.answered, expected: message.expected });
-          return;
-        case 'stage:reveal':
-          setStage({
-            k: 'reveal',
-            q: message.question,
-            reveal: message.reveal,
-            answerCount: message.answerCount,
-            correctCount: message.correctCount,
-            playerCount: message.playerCount,
-          });
-          return;
-        case 'stage:scoreboard':
-          setStage({
-            k: 'scoreboard',
-            afterSeq: message.afterSeq,
-            top: message.top,
-            othersCount: message.othersCount,
-            hasNext: message.hasNextQuestion,
-          });
-          return;
-        case 'stage:podium':
-          setStage({ k: 'podium', ranking: message.ranking });
-          return;
-        case 'room:finished':
-          setStage({ k: 'finished' });
-          return;
-        case 'room:error':
-          // Der Server hat die Sammlung abgelehnt. Zurueck zum Bildschirm,
-          // auf dem der Nutzer etwas daran aendern kann - und der Riegel
-          // wird geloest, sonst bliebe dieser ganze Pfad folgenlos (B2).
-          oeffne.current?.abgelehnt();
-          setServerfehler(message.message);
-          setStage({ k: 'upload' });
-          return;
-        default:
-          return;
-      }
+    const gelegt = verdrahte({
+      stage: setStage,
+      code: setCode,
+      roster: setRoster,
+      antworten: setAnswered,
+      serverfehler: setServerfehler,
+      bereit: () => setBereit(true),
     });
-    wireRef.current = wire;
-    oeffne.current = createRoomOnce<QuizPayload>(
-      wire.socket,
-      (quiz) => wire.send({ t: 'host:create', quiz }),
-      () => setBereit(true),
-    );
+    leitung.current = gelegt;
     return () => {
-      wire.dispose();
-      wireRef.current = null;
-      oeffne.current = null;
+      gelegt.dispose();
+      leitung.current = null;
     };
   }, []);
 
   const starte = useCallback((quiz: QuizPayload): void => {
-    setServerfehler(null);
-    setStage({ k: 'connecting' });
-    oeffne.current?.oeffne(quiz);
+    leitung.current?.starte(quiz);
   }, []);
 
   // Die gemeinsame Uhr treibt jede Phase der Frage — nicht ein eintreffendes Ereignis.
   useEffect(() => {
     let raf = 0;
     const loop = (): void => {
-      const wire = wireRef.current;
-      if (wire !== null) setNow(wire.serverNow());
+      const gelegt = leitung.current;
+      if (gelegt !== null) setNow(gelegt.serverNow());
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -171,16 +232,16 @@ export function App(): JSX.Element {
   }, [stage, now]);
 
   const advance = useCallback(() => {
-    const wire = wireRef.current;
-    if (wire === null) return;
+    const gelegt = leitung.current;
+    if (gelegt === null) return;
     if (stage.k === 'upload') return;
     if (stage.k === 'lobby') {
       if (roster.length === 0) return;
-      wire.send({ t: 'host:start', expectedPhase: 'LOBBY' });
+      gelegt.send({ t: 'host:start', expectedPhase: 'LOBBY' });
       return;
     }
     if (stage.k === 'reveal' || stage.k === 'scoreboard' || stage.k === 'podium') {
-      wire.send({ t: 'host:advance', expectedPhase: phase });
+      gelegt.send({ t: 'host:advance', expectedPhase: phase });
     }
   }, [stage, phase, roster.length]);
 

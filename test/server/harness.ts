@@ -1,10 +1,10 @@
 import { createServer, type Server as HttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { Server } from 'socket.io';
+import type { Server } from 'socket.io';
 import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client';
 import { WIRE_CHANNEL, type ServerMessage } from '@quizbude/protocol';
 import { attachGateway } from '../../packages/server/src/transport/socketio/gateway.js';
-import { MAX_SOCKET_MESSAGE_BYTES } from '../../packages/server/src/transport/socketio/validate.js';
+import { createSocketServer } from '../../packages/server/src/transport/socketio/server.js';
 import type { RoomRegistry } from '../../packages/server/src/runtime/roomRegistry.js';
 
 /**
@@ -37,13 +37,12 @@ const DEFAULT_TIMEOUT_MS = 4_000;
 
 export async function startHarness(): Promise<Harness> {
   const http: HttpServer = createServer();
-  // Dieselben Masse wie in `main.ts` - ein Harness, das groessere Nachrichten
-  // annimmt als der echte Server oder kleinere, misst nicht den Betrieb.
-  const io = new Server(http, {
-    perMessageDeflate: false,
-    maxHttpBufferSize: MAX_SOCKET_MESSAGE_BYTES,
-    cors: { origin: true },
-  });
+  // Genau der Server, den `main.ts` hochfaehrt - nicht ein von Hand
+  // nachgebauter mit denselben Zahlen. Ein Harness, das groessere
+  // Nachrichten annimmt als der echte Server oder kleinere, misst nicht den
+  // Betrieb; und von Hand nachgebaute Masse laufen auseinander, sobald
+  // jemand nur eine Seite aendert.
+  const io: Server = createSocketServer(http);
   const registry = attachGateway(io);
   await new Promise<void>((resolve) => {
     http.listen(0, '127.0.0.1', resolve);

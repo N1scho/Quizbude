@@ -12,7 +12,6 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { Server } from 'socket.io';
 import { makeRequestListener } from './http/requestListener.js';
 import { makeStaticHandler } from './http/static.js';
 import { stageBanner } from './runtime/banner.js';
@@ -20,7 +19,7 @@ import { browserCommand } from './runtime/browser.js';
 import { lanAddresses } from './runtime/network.js';
 import { createRuntime } from './runtime/startup.js';
 import { attachGateway } from './transport/socketio/gateway.js';
-import { MAX_SOCKET_MESSAGE_BYTES } from './transport/socketio/validate.js';
+import { createSocketServer } from './transport/socketio/server.js';
 
 const hostDir = fileURLToPath(new URL('../../../apps/host-web/dist', import.meta.url));
 const playerDir = fileURLToPath(new URL('../../../apps/player-web/dist', import.meta.url));
@@ -32,18 +31,11 @@ const serveStatic = makeStaticHandler([
 
 const http = createServer(makeRequestListener(serveStatic));
 
-const io = new Server(http, {
-  // Harte Betriebsvorgabe aus Konzept 6.6: eingeschaltet reserviert zlib
-  // je Verbindung sechsstellige Byte-Betraege.
-  perMessageDeflate: false,
-  // B3: Die Vorgabe von Socket.IO sind 1e6 Bytes - weniger, als eine
-  // erlaubte Fragendatei am Draht gross werden kann. Hergeleitet wird das
-  // Mass aus MAX_UPLOAD_BYTES; die Rechnung steht bei der Konstante.
-  maxHttpBufferSize: MAX_SOCKET_MESSAGE_BYTES,
-  cors: { origin: true },
-});
-
-const registry = attachGateway(io);
+// Die Masse des Sockets stehen in `transport/socketio/server.ts` und sind
+// dort von einem Verhaltenstest gebunden. Hier bleibt kein `io` stehen, auf
+// das sich eine Zeile wie `io.engine.opts.maxHttpBufferSize = 1e6;` noch
+// stuetzen koennte (N3).
+const registry = attachGateway(createSocketServer(http));
 
 function openStage(url: string): void {
   const { command, args } = browserCommand(process.platform, url);
