@@ -46,7 +46,7 @@ function kernAusSeite(): Record<string, (...args: never[]) => unknown> {
  * bindet die Schreibweise; dieser hier bindet das Verhalten der Fassung,
  * die beim Nutzer laeuft.
  */
-function stueckeAusSeite(namen: readonly string[], kern: unknown): Record<string, unknown> {
+function quelleAusSeite(namen: readonly string[]): string {
   const html = seite();
   const von = html.indexOf('<script>') + '<script>'.length;
   const bis = html.lastIndexOf('</script>');
@@ -68,10 +68,13 @@ function stueckeAusSeite(namen: readonly string[], kern: unknown): Record<string
   if (fehlend.length > 0) {
     throw new Error(`In der Seite fehlen: ${fehlend.join(', ')}`);
   }
-  const quelle = [...new Set(gefunden.values())].join('\n');
+  return [...new Set(gefunden.values())].join('\n');
+}
+
+function stueckeAusSeite(namen: readonly string[], kern: unknown): Record<string, unknown> {
   return new Function(
     'Kern',
-    `${quelle}\nreturn { ${namen.map((n) => `${n}: ${n}`).join(', ')} };`,
+    `${quelleAusSeite(namen)}\nreturn { ${namen.map((n) => `${n}: ${n}`).join(', ')} };`,
   )(kern) as Record<string, unknown>;
 }
 
@@ -158,6 +161,84 @@ describe('Ein Parser, zwei Fassungen', () => {
     expect(html).toContain('id="editorfeld"');
     expect(html).toContain('new FileReader()');
     expect(html).toMatch(/zone\.addEventListener\('drop'/u);
+  });
+});
+
+describe('Erst der Pruefbericht, dann die Lobby (B10)', () => {
+  /**
+   * Zwei Mutationsproben des Reviews waren hier gruen: das `ok`-Tor liess
+   * sich aus beiden Fassungen streichen, ohne dass ein Test fiel. In der
+   * Browser-Fassung ist es das EINZIGE Tor - dahinter steht kein
+   * `loadQuestion`, das eine kaputte Sammlung noch abfinge. Eine Frage mit
+   * zwei markierten Antworten kaeme direkt in die Runde.
+   *
+   * Gebunden wird der ausgelieferte Quelltext selbst, mit nachgebauter
+   * Umgebung - nicht eine Abschrift daneben.
+   */
+  interface Lauf {
+    readonly quiz: unknown;
+    readonly spur: readonly string[];
+  }
+
+  function uebernimm(geprueft: unknown, zurBuehne: boolean): Lauf {
+    const spur: string[] = [];
+    const quelle = quelleAusSeite(['editorUebernehmen']);
+    const umgebung = {
+      geprueft,
+      zurBuehne,
+      $: (id: string): Record<string, string> => {
+        spur.push(`$:${id}`);
+        return { value: 'Frage? | 20\n* Merkur\n* Venus', textContent: '' };
+      },
+      merke: (schluessel: string): void => void spur.push(`merke:${schluessel}`),
+      pruefeEditor: (): void => void spur.push('pruefeEditor'),
+      buehneEroeffnen: (): void => void spur.push('buehneEroeffnen'),
+      zumStart: (): void => void spur.push('zumStart'),
+      schnappschuss: null,
+    };
+    const lauf = new Function(
+      'umgebung',
+      [
+        'let geprueft = umgebung.geprueft;',
+        'let quiz = null;',
+        'const $ = umgebung.$;',
+        'const merke = umgebung.merke;',
+        'const pruefeEditor = umgebung.pruefeEditor;',
+        'const buehneEroeffnen = umgebung.buehneEroeffnen;',
+        'const zumStart = umgebung.zumStart;',
+        'const schnappschuss = umgebung.schnappschuss;',
+        quelle,
+        'editorUebernehmen(umgebung.zurBuehne);',
+        'return quiz;',
+      ].join('\n'),
+    ) as (u: unknown) => unknown;
+    return { quiz: lauf(umgebung), spur };
+  }
+
+  it('ein Bericht mit Fehlern bleibt folgenlos - kein Quiz, keine Buehne', () => {
+    const kaputt = { ok: false, titel: 'Kaputt', questions: [], fehler: [{ zeile: 1, text: 'x' }] };
+    const lauf = uebernimm(kaputt, true);
+    expect(lauf.quiz).toBeNull();
+    expect(lauf.spur).toContain('pruefeEditor');
+    expect(lauf.spur).not.toContain('buehneEroeffnen');
+    expect(lauf.spur).not.toContain('zumStart');
+    expect(lauf.spur).not.toContain('merke:quiztext');
+  });
+
+  it('ohne Bericht ueberhaupt bleibt es ebenso folgenlos', () => {
+    const lauf = uebernimm(null, true);
+    expect(lauf.quiz).toBeNull();
+    expect(lauf.spur).toContain('pruefeEditor');
+    expect(lauf.spur).not.toContain('buehneEroeffnen');
+  });
+
+  it('ein gruener Bericht kommt durch - sonst bliebe die Probe oben wertlos', () => {
+    const gut = { ok: true, titel: 'Abendrunde', questions: [{ id: 'q1' }], fehler: [] };
+    const lauf = uebernimm(gut, true);
+    expect(lauf.quiz).toBe(gut);
+    expect(lauf.spur).toContain('merke:quiztext');
+    expect(lauf.spur).toContain('buehneEroeffnen');
+    expect(lauf.spur).not.toContain('pruefeEditor');
   });
 });
 

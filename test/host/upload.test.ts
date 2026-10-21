@@ -116,9 +116,49 @@ describe('Der Bildschirm vor der Lobby', () => {
     expect(markup).toContain('Runde er');
   });
 
+  /** Genau der Knopf, nicht irgendein `disabled` im Markup. */
+  const EROEFFNEN = /<button class="weiter" type="button"( disabled="")?>/u;
+
+  function knopf(markup: string): string {
+    const treffer = EROEFFNEN.exec(markup);
+    if (treffer === null) throw new Error('Der Eroeffnen-Knopf steht nicht im Markup.');
+    return treffer[0];
+  }
+
   it('laesst die Runde erst oeffnen, wenn die Leitung steht', () => {
-    expect(schirm(false)).toContain('disabled');
+    expect(knopf(schirm(false))).toContain('disabled');
     expect(schirm(false)).toContain('Verbinde');
+  });
+
+  it('laesst die Runde erst oeffnen, wenn der Pruefbericht gruen ist (B10)', () => {
+    // Zwei Mutationsproben des Reviews waren hier gruen: das `ok`-Tor liess
+    // sich ersatzlos streichen, ohne dass ein Test fiel. Eine Sammlung mit
+    // zwei markierten Antworten kaeme dann bis in den Raum - und in der
+    // Browser-Fassung steht dahinter nicht einmal `loadQuestion`.
+    const kaputt = html(
+      createElement(Upload, {
+        onStart: () => undefined,
+        bereit: true,
+        serverfehler: null,
+        anfangstext: 'Frage? | 20\n* Merkur\n* Venus',
+      }),
+    );
+    expect(kaputt).toContain('Das passt noch nicht');
+    expect(knopf(kaputt)).toContain('disabled');
+
+    // Die Gegenprobe: mit gruenem Bericht und stehender Leitung ist der
+    // Knopf frei. Sonst bliebe der Test auch dann gruen, wenn der Knopf
+    // immer gesperrt waere.
+    const gut = html(
+      createElement(Upload, {
+        onStart: () => undefined,
+        bereit: true,
+        serverfehler: null,
+        anfangstext: 'Frage? | 20\n* Merkur\nVenus',
+      }),
+    );
+    expect(gut).toContain('Alles in Ordnung');
+    expect(knopf(gut)).not.toContain('disabled');
   });
 
   it('zeigt einen Serverfehler statt ihn zu verschlucken', () => {

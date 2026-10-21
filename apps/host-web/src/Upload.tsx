@@ -76,15 +76,27 @@ export interface UploadProps {
   readonly bereit: boolean;
   /** Was der Server zu den Fragen gesagt hat, falls er etwas gesagt hat. */
   readonly serverfehler: string | null;
+  /**
+   * Der Text, mit dem der Bildschirm aufmacht. Ohne Angabe die Demorunde.
+   *
+   * B10: Das Tor "erst der Pruefbericht, dann die Lobby" haengt am
+   * Zustand dieser Komponente, nicht an einer Eigenschaft - ohne diese
+   * Naht laesst es sich von aussen gar nicht binden, und eine
+   * Mutationsprobe, die `!bericht.ok` ersatzlos streicht, blieb gruen.
+   * Die Browser-Fassung holt ihren Anfangstext aus demselben Grund aus
+   * dem Speicher des Browsers (`erinnere('quiztext')`).
+   */
+  readonly anfangstext?: string;
 }
 
 export function nutzlast(erg: ParseErgebnis): QuizPayload {
   return { title: erg.titel, questions: erg.questions };
 }
 
-export function Upload({ onStart, bereit, serverfehler }: UploadProps): JSX.Element {
-  const [text, setText] = useState<string>(DEMO_TEXT);
-  const [erg, setErg] = useState<ParseErgebnis>(() => parseQuiz(DEMO_TEXT));
+export function Upload({ onStart, bereit, serverfehler, anfangstext }: UploadProps): JSX.Element {
+  const anfang = anfangstext ?? DEMO_TEXT;
+  const [text, setText] = useState<string>(anfang);
+  const [erg, setErg] = useState<ParseErgebnis>(() => parseQuiz(anfang));
   const [meldung, setMeldung] = useState<string | null>(null);
   const [ueberAblage, setUeberAblage] = useState(false);
   const [kopierstand, setKopierstand] = useState<string>('');
@@ -239,6 +251,11 @@ export function Upload({ onStart, bereit, serverfehler }: UploadProps): JSX.Elem
       <Bericht bericht={bericht} />
 
       <div className="knopfreihe">
+        {/*
+          Erst der Pruefbericht, dann die Lobby. Beide Teile zaehlen: ohne
+          Leitung gibt es nichts zu eroeffnen, und ohne gruenen Bericht
+          duerfte eine kaputte Sammlung bis in den Raum laufen.
+        */}
         <button
           className="weiter"
           type="button"
