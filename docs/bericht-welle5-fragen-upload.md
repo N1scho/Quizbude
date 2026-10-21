@@ -467,9 +467,11 @@ Ausgangsstand, 1,55 kB unter dem Budget von 65 kB. Das Budget ist nicht gerissen
 Der Grund für die Unveränderlichkeit ist nachgesehen und nicht vermutet: der
 Parser steckt gar nicht im Spielerbündel
 (`grep -c "keine Antwort markiert" apps/player-web/dist/assets/*.js` → `0`).
-Gewachsen ist die Bühne (`apps/host-web`, 68,57 kB gzip bei Stufe 9) und die
-Browser-Fassung (`standalone/quizbude.html`, 30,60 kB gzip, 117 537 B roh);
-für beide gilt das Budget der Beitrittsseite nicht.
+Gewachsen ist die Bühne (`apps/host-web`, von `vite build` gemeldet:
+0,28 + 1,97 + 68,09 = 70,34 kB gzip) und die Browser-Fassung
+(`standalone/quizbude.html`, 30,60 kB gzip, 117 537 B roh); für beide gilt
+das Budget der Beitrittsseite nicht — es meint die Seite, die der Gast auf
+sein Telefon lädt.
 
 **Gesetz 0 auf dem Upload-Pfad, eigens nachgemessen** (Probe danach entfernt,
 `git status --short` sauber): Fragetext, Antworttext, Erklärung und Titel als
