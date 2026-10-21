@@ -166,6 +166,109 @@ describe('Beiwerk des Werkzeugs wird stillschweigend verdaut', () => {
   });
 });
 
+describe('Die Nachsichten gekreuzt, nicht aufgezaehlt (B1/B6)', () => {
+  /**
+   * Jede Nachsicht fuer sich war getestet und funktionierte; die
+   * Kombination brach. `* ✅ Merkur` ging gruen durch und schrieb das
+   * Haekchen auf die Kachel - jeder im Raum sah die richtige Antwort,
+   * bevor er tippte. `A) ✅ Merkur` und `Merkur ✅` verloren die
+   * Markierung ganz und meldeten "keine Antwort markiert".
+   */
+  const kreuze: readonly (readonly [string, string])[] = [
+    ['Stern und Haekchen', '* ✅ Merkur\nVenus'],
+    ['Beschriftung und Haekchen', 'A) ✅ Merkur\nB) Venus'],
+    ['Aufzaehlung und Haekchen', '- ✅ Merkur\n- Venus'],
+    ['Haekchen am Zeilenende', 'Merkur ✅\nVenus'],
+    ['Beschriftung, Fett und Haekchen', 'A) ✅ **Merkur**\nb) Venus'],
+    ['Aufzaehlung, Beschriftung und Haekchen', '- A) ✅ Merkur\n- B) Venus'],
+    ['Doppeltes Haekchen vorn', '✅✅ Merkur\nVenus'],
+    ['Doppeltes Haekchen hinten', 'Merkur ✅✅\nVenus'],
+    ['Stern vorn, Haekchen hinten', '* Merkur ✅\nVenus'],
+    ['Kreuzkasten und Aufzaehlung', '- [x] Merkur\n- [ ] Venus'],
+    ['Haken und Kreuz gemischt', '✔ Merkur\nVenus ✗'],
+  ];
+
+  it('liest in jeder Mischform genau eine Markierung - und laesst den Text sauber', () => {
+    for (const paar of kreuze) {
+      const erg = parseQuiz(`Frage? | 20\n${paar[1]}`);
+      expect(erg.fehler, paar[0]).toEqual([]);
+      expect(erg.ok, paar[0]).toBe(true);
+      const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+      expect(spec.options.map((o) => o.label), paar[0]).toEqual(['Merkur', 'Venus']);
+      expect(spec.correctIndex, paar[0]).toBe(0);
+    }
+  });
+
+  it('kein Markierungszeichen bleibt in einer Beschriftung stehen', () => {
+    // Die Falsch-Gruen-Probe. Der Test oben prueft gegen 'Merkur' und
+    // 'Venus' und faellt schon, wenn ein Haekchen stehen bleibt - dieser
+    // hier faellt auch dann noch, wenn die erwarteten Woerter einmal
+    // angepasst werden. Der Schaden ist die sichtbare Antwort auf der
+    // Leinwand, nicht der abweichende String.
+    const VERRAETERISCH = /[✅✔✓☑☐❌✗]/u;
+    for (const paar of kreuze) {
+      const erg = parseQuiz(`Frage? | 20\n${paar[1]}`);
+      const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+      for (const o of spec.options) {
+        expect(VERRAETERISCH.test(o.label), `${paar[0]}: ${o.label}`).toBe(false);
+      }
+      expect(erg.questions[0]?.prompt, paar[0]).toBe('Frage?');
+    }
+  });
+
+  it('ein leerer Kasten markiert auch am Zeilenende nicht', () => {
+    // Ruling 4: `[ ]`, ☐, ❌ und ✗ sind keine Markierung - vorn nicht und
+    // hinten nicht. Auf die Kachel gehoeren sie trotzdem nicht.
+    for (const leer of ['☐', '❌', '✗']) {
+      const erg = parseQuiz(`Frage? | 20\nMerkur ${leer}\nVenus ${leer}`);
+      expect(erg.ok, leer).toBe(false);
+      expect(erg.fehler[0]?.text, leer).toContain('keine Antwort markiert');
+      const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+      expect(spec.options.map((o) => o.label), leer).toEqual(['Merkur', 'Venus']);
+    }
+  });
+
+  it('Stern und Plus am Zeilenende sind Auszeichnung, keine Markierung', () => {
+    // Ruling 3: `**Merkur**` endet auf `*`. Wuerde ein Stern hinten als
+    // Markierung gelesen, markierte jede unvollstaendig geschlossene
+    // Fettschrift eine Antwort - und zwar die falsche.
+    for (const schwanz of ['*', '+']) {
+      const erg = parseQuiz(`Frage? | 20\n* Merkur\nVenus ${schwanz}`);
+      expect(erg.fehler, schwanz).toEqual([]);
+      const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+      expect(spec.correctIndex, schwanz).toBe(0);
+    }
+  });
+
+  it('der Fluchtweg ueberlebt die neue Reihenfolge', () => {
+    // Ruling 5: Beschriftung und Aufzaehlung werden jetzt VOR dem
+    // Markierungstest abgetragen. Der Fluchtweg wird davor geprueft und
+    // nach jedem abgetragenen Markierungszeichen noch einmal - beide
+    // Faelle des Auftrags bleiben, wie sie waren.
+    const a = parseQuiz('Frage? | 20\n* Merkur\n\\* Venus');
+    expect(a.fehler).toEqual([]);
+    expect((a.questions[0]?.spec as ParsedSingleChoiceSpec).options.map((o) => o.label)).toEqual([
+      'Merkur',
+      '* Venus',
+    ]);
+    const b = parseQuiz('Frage? | 20\n*\\* Merkur\nVenus');
+    expect(b.fehler).toEqual([]);
+    const specB = b.questions[0]?.spec as ParsedSingleChoiceSpec;
+    expect(specB.options.map((o) => o.label)).toEqual(['* Merkur', 'Venus']);
+    expect(specB.correctIndex).toBe(0);
+  });
+
+  it('dieselbe Mischform im JSON, nicht eine zweite Fassung davon', () => {
+    const erg = parseQuiz(
+      JSON.stringify({ fragen: [{ frage: 'F?', antworten: ['* ✅ Merkur', 'B) Venus'] }] }),
+    );
+    expect(erg.fehler).toEqual([]);
+    const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+    expect(spec.options.map((o) => o.label)).toEqual(['Merkur', 'Venus']);
+    expect(spec.correctIndex).toBe(0);
+  });
+});
+
 describe('Inhaltsfehler werden laut, mit Zeilennummer', () => {
   it('zwei markierte Antworten - die Meldung aus dem Auftrag', () => {
     const text = ['Frage? | 20', '* Merkur', '* Venus'].join('\n');

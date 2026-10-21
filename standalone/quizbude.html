@@ -710,6 +710,8 @@ const MARKIERUNG = /^(\*|\+|✅|✔|✓|☑|\[\s*[xX]\s*\])\s*/;
 const LEERKASTEN = /^(\[\s*\]|☐|❌|✗)\s*/;
 const PUNKT = /^(-|–|•|·|●|■)\s+/;
 const BESCHRIFTUNG = /^([A-Za-z]|\d{1,2})[).:]\s+/;
+const MARKIERUNG_ENDE = /\s*(✅|✔|✓|☑)+\s*$/;
+const LEERKASTEN_ENDE = /\s*(☐|❌|✗)+\s*$/;
 const NUMMERIERUNG = /^\d{1,3}[).]\s+/;
 function istMarkiert(zeile) {
     if (zeile.startsWith('**'))
@@ -725,29 +727,43 @@ function fluchtweg(rest) {
         return null;
     return rest.slice(1);
 }
-function leseAntwort(zeile) {
-    const roh = zeile.text.trim();
+function leseBeschriftung(roh) {
     const direkt = fluchtweg(roh);
     if (direkt !== null) {
-        return { nr: zeile.nr, label: direkt.trim(), markiert: false };
+        return { label: direkt.trim(), markiert: false };
     }
     let rest = roh;
     let markiert = false;
-    if (istMarkiert(rest)) {
-        markiert = true;
-        rest = rest.replace(MARKIERUNG, '');
-        const entkommen = fluchtweg(rest);
-        if (entkommen !== null) {
-            return { nr: zeile.nr, label: entkommen.trim(), markiert: true };
+    for (let runde = 0; runde < 8; runde += 1) {
+        const vorher = rest;
+        rest = rest.replace(BESCHRIFTUNG, '').replace(PUNKT, '');
+        if (istMarkiert(rest)) {
+            markiert = true;
+            rest = rest.replace(MARKIERUNG, '');
+            const entkommen = fluchtweg(rest);
+            if (entkommen !== null) {
+                return { label: entkommen.trim(), markiert: true };
+            }
         }
+        else {
+            rest = rest.replace(LEERKASTEN, '');
+        }
+        if (rest === vorher)
+            break;
     }
-    else {
-        rest = rest.replace(LEERKASTEN, '').replace(PUNKT, '');
+    while (MARKIERUNG_ENDE.test(rest)) {
+        markiert = true;
+        rest = rest.replace(MARKIERUNG_ENDE, '');
     }
-    rest = rest.replace(BESCHRIFTUNG, '');
+    while (LEERKASTEN_ENDE.test(rest))
+        rest = rest.replace(LEERKASTEN_ENDE, '');
     rest = entferneAuszeichnung(rest);
     rest = entpackeAnfuehrung(rest);
-    return { nr: zeile.nr, label: rest.trim(), markiert };
+    return { label: rest.trim(), markiert };
+}
+function leseAntwort(zeile) {
+    const gelesen = leseBeschriftung(zeile.text.trim());
+    return { nr: zeile.nr, label: gelesen.label, markiert: gelesen.markiert };
 }
 const ZEIT = /\s*[|｜]\s*(\d{1,5})\s*(?:s|sek|sek\.|sekunden|sec)?\s*$/i;
 function leseFrage(text) {
@@ -957,9 +973,7 @@ function jsonAntworten(roh) {
     const out = [];
     for (const eintrag of roh) {
         if (typeof eintrag === 'string') {
-            const markiert = istMarkiert(eintrag.trim());
-            const text = markiert ? eintrag.trim().replace(MARKIERUNG, '') : eintrag;
-            out.push({ label: entpackeAnfuehrung(entferneAuszeichnung(text)).trim(), markiert });
+            out.push(leseBeschriftung(eintrag.trim()));
             continue;
         }
         if (isRecord(eintrag)) {

@@ -338,6 +338,26 @@ const LEERKASTEN = /^(\[\s*\]|☐|❌|✗)\s*/;
 const PUNKT = /^(-|–|•|·|●|■)\s+/;
 /** `A)` `a.` `B:` `1)` vor einer Antwort. */
 const BESCHRIFTUNG = /^([A-Za-z]|\d{1,2})[).:]\s+/;
+
+/**
+ * Markierung am Zeilenende (B6) - aber NUR die eindeutigen Haekchen.
+ *
+ * Ein `*` am Zeilenende ist der Rest einer Fett- oder Kursivauszeichnung
+ * (`**Merkur**`, `*Merkur*`) und keine Aussage ueber die Richtigkeit; ein
+ * `+` steht dort fuer eine Aufzaehlung oder ein Rechenzeichen, und `[x]`
+ * gehoert vor die Antwort. Diese drei gelten hinten deshalb ausdruecklich
+ * NICHT als Markierung. Ein Haekchen dagegen ist nirgends Auszeichnung:
+ * steht es hinten, ist es gemeint.
+ */
+const MARKIERUNG_ENDE = /\s*(✅|✔|✓|☑)+\s*$/;
+
+/**
+ * Ein leerer Kasten ist auch am Zeilenende keine Markierung (Ruling 4) -
+ * aber ebenso wenig Inhalt, der auf die Kachel gehoert. Er wird abgetragen,
+ * ohne etwas zu markieren.
+ */
+const LEERKASTEN_ENDE = /\s*(☐|❌|✗)+\s*$/;
+
 /** Nummerierung vor einer Frage. */
 const NUMMERIERUNG = /^\d{1,3}[).]\s+/;
 
@@ -360,31 +380,66 @@ function fluchtweg(rest: string): string | null {
   return rest.slice(1);
 }
 
-function leseAntwort(zeile: Zeile): RohAntwort {
-  const roh = zeile.text.trim();
-
+/**
+ * Eine Antwortbeschriftung von allem befreien, was Schreibweise ist, und
+ * dabei sagen, ob sie markiert war.
+ *
+ * Steht hier und nicht zweimal: das Zeilenformat und die JSON-Form hatten
+ * je eine eigene Fassung dieses Abtrags, und genau die JSON-Fassung trug
+ * B1 unveraendert weiter.
+ */
+function leseBeschriftung(roh: string): { label: string; markiert: boolean } {
+  // Der Fluchtweg steht vor allem anderen: `\* Sternchen` ist Text.
   const direkt = fluchtweg(roh);
   if (direkt !== null) {
-    return { nr: zeile.nr, label: direkt.trim(), markiert: false };
+    return { label: direkt.trim(), markiert: false };
   }
 
+  // B1 und B6 haben dieselbe Wurzel: einmal abtragen reicht nicht.
+  //
+  // In jeder Runde wird erst die Schreibweise abgetragen - Beschriftung
+  // (`A)`) und Aufzaehlungszeichen (`-`) -, danach erst die Markierung
+  // geprueft. Vorher sah `istMarkiert` die rohe Zeile, und `A) ✅ Merkur`
+  // galt als unmarkiert, obwohl der Autor markiert hatte (B6). Und weil nur
+  // ein einziges Mal ersetzt wurde, blieb bei `* ✅ Merkur` das Haekchen im
+  // Antworttext stehen - die richtige Antwort sichtbar auf der Leinwand (B1).
+  //
+  // Die Schleife laeuft, bis nichts mehr greift. Damit ist die Reihenfolge
+  // innerhalb einer Runde nicht mehr tragend, sondern nur noch das, was
+  // jede Runde abtraegt.
   let rest = roh;
   let markiert = false;
-  if (istMarkiert(rest)) {
-    markiert = true;
-    rest = rest.replace(MARKIERUNG, '');
-    const entkommen = fluchtweg(rest);
-    if (entkommen !== null) {
-      return { nr: zeile.nr, label: entkommen.trim(), markiert: true };
+  for (let runde = 0; runde < 8; runde += 1) {
+    const vorher = rest;
+    rest = rest.replace(BESCHRIFTUNG, '').replace(PUNKT, '');
+    if (istMarkiert(rest)) {
+      markiert = true;
+      rest = rest.replace(MARKIERUNG, '');
+      const entkommen = fluchtweg(rest);
+      if (entkommen !== null) {
+        return { label: entkommen.trim(), markiert: true };
+      }
+    } else {
+      rest = rest.replace(LEERKASTEN, '');
     }
-  } else {
-    rest = rest.replace(LEERKASTEN, '').replace(PUNKT, '');
+    if (rest === vorher) break;
   }
 
-  rest = rest.replace(BESCHRIFTUNG, '');
+  // Dasselbe am Zeilenende - nur fuer die eindeutigen Haekchen.
+  while (MARKIERUNG_ENDE.test(rest)) {
+    markiert = true;
+    rest = rest.replace(MARKIERUNG_ENDE, '');
+  }
+  while (LEERKASTEN_ENDE.test(rest)) rest = rest.replace(LEERKASTEN_ENDE, '');
+
   rest = entferneAuszeichnung(rest);
   rest = entpackeAnfuehrung(rest);
-  return { nr: zeile.nr, label: rest.trim(), markiert };
+  return { label: rest.trim(), markiert };
+}
+
+function leseAntwort(zeile: Zeile): RohAntwort {
+  const gelesen = leseBeschriftung(zeile.text.trim());
+  return { nr: zeile.nr, label: gelesen.label, markiert: gelesen.markiert };
 }
 
 const ZEIT = /\s*[|｜]\s*(\d{1,5})\s*(?:s|sek|sek\.|sekunden|sec)?\s*$/i;
@@ -650,9 +705,9 @@ function jsonAntworten(roh: unknown): JsonAntwort[] | null {
   const out: JsonAntwort[] = [];
   for (const eintrag of roh) {
     if (typeof eintrag === 'string') {
-      const markiert = istMarkiert(eintrag.trim());
-      const text = markiert ? eintrag.trim().replace(MARKIERUNG, '') : eintrag;
-      out.push({ label: entpackeAnfuehrung(entferneAuszeichnung(text)).trim(), markiert });
+      // Derselbe Abtrag wie im Zeilenformat - nicht eine zweite Fassung
+      // davon. `"* ✅ Merkur"` kommt im JSON genauso vor.
+      out.push(leseBeschriftung(eintrag.trim()));
       continue;
     }
     if (isRecord(eintrag)) {
