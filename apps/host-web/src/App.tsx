@@ -9,7 +9,7 @@ import type {
   ServerMessage,
 } from '@quizbude/protocol';
 import { connect, type Wire } from './wire';
-import { createRoomOnce } from './session';
+import { createRoomOnce, type RoomSession } from './session';
 import { Shape, slotFor } from './shapes';
 import { istWeiterTaste } from './tasten';
 import { Upload } from './Upload';
@@ -51,7 +51,7 @@ export function App(): JSX.Element {
   const [stage, setStage] = useState<Stage>({ k: 'upload' });
   const [bereit, setBereit] = useState(false);
   const [serverfehler, setServerfehler] = useState<string | null>(null);
-  const oeffne = useRef<((quiz: QuizPayload) => void) | null>(null);
+  const oeffne = useRef<RoomSession<QuizPayload> | null>(null);
   const [code, setCode] = useState<string>('');
   const [roster, setRoster] = useState<readonly RosterEntry[]>([]);
   const [answered, setAnswered] = useState<{ answered: number; expected: number }>({
@@ -111,7 +111,9 @@ export function App(): JSX.Element {
           return;
         case 'room:error':
           // Der Server hat die Sammlung abgelehnt. Zurueck zum Bildschirm,
-          // auf dem der Nutzer etwas daran aendern kann.
+          // auf dem der Nutzer etwas daran aendern kann - und der Riegel
+          // wird geloest, sonst bliebe dieser ganze Pfad folgenlos (B2).
+          oeffne.current?.abgelehnt();
           setServerfehler(message.message);
           setStage({ k: 'upload' });
           return;
@@ -135,7 +137,7 @@ export function App(): JSX.Element {
   const starte = useCallback((quiz: QuizPayload): void => {
     setServerfehler(null);
     setStage({ k: 'connecting' });
-    oeffne.current?.(quiz);
+    oeffne.current?.oeffne(quiz);
   }, []);
 
   // Die gemeinsame Uhr treibt jede Phase der Frage — nicht ein eintreffendes Ereignis.

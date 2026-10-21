@@ -21,9 +21,33 @@ export interface ConnectSource {
   on(event: 'connect', listener: () => void): unknown;
 }
 
+/** Was die Buehne mit der Sitzung tun kann. */
+export interface RoomSession<T> {
+  /** Raum eroeffnen - oder darauf warten, dass die Leitung steht. */
+  oeffne(arg: T): void;
+  /**
+   * Der Server hat die Sammlung abgelehnt (`room:error`). Erst damit ist
+   * ein neuer Versuch wieder erlaubt.
+   */
+  abgelehnt(): void;
+}
+
 /**
- * Liefert den Oeffner. Jeder Aufruf danach - und jede Wiederverbindung -
- * bleibt folgenlos: `create` laeuft hoechstens einmal.
+ * Liefert die Sitzung. Solange ein Raum entsteht oder besteht, bleibt jeder
+ * weitere Klick und jede Wiederverbindung folgenlos.
+ *
+ * B2: Der Riegel haengt am ABSENDEN, nicht am eingetroffenen
+ * `room:created` - anders waere der Doppelklick-Schutz in genau dem
+ * Zeitfenster offen, in dem er gebraucht wird: zwischen dem ersten Klick
+ * und der ersten Antwort des Servers. Dafuer wird er in dem einen Fall
+ * wieder geloest, in dem sicher kein Raum entstanden ist: der
+ * ausdruecklichen Ablehnung. Vorher war der `room:error`-Pfad der Buehne
+ * tot - der Nutzer kam zurueck auf den Fragen-Bildschirm, aenderte etwas,
+ * klickte, und nichts wurde gesendet. Die Buehne hing in "Buehne verbindet
+ * sich ..." bis zum Neuladen.
+ *
+ * Das hier bleibt kein Wiedereinstieg. Ein Reconnect-Mechanismus gehoert
+ * ausdruecklich nicht in den Durchstich.
  */
 export function createRoomOnce<T>(
   source: ConnectSource,
@@ -35,7 +59,7 @@ export function createRoomOnce<T>(
    * zurueckgekehrt, waehrend alle Tore schwiegen.
    */
   onConnect: () => void = () => undefined,
-): (arg: T) => void {
+): RoomSession<T> {
   let erzeugt = false;
   let verbunden = false;
   let wunsch: { readonly arg: T } | null = null;
@@ -52,8 +76,19 @@ export function createRoomOnce<T>(
     vielleicht();
   });
 
-  return (arg: T): void => {
-    if (wunsch === null) wunsch = { arg };
-    vielleicht();
+  return {
+    oeffne: (arg: T): void => {
+      // Jeder Aufruf ueberschreibt den Wunsch. Sonst ginge nach einer
+      // Ablehnung genau die korrigierte Fassung verloren.
+      wunsch = { arg };
+      vielleicht();
+    },
+    abgelehnt: (): void => {
+      erzeugt = false;
+      // Und der Wunsch geht mit: eine Wiederverbindung darf die abgelehnte
+      // Sammlung nicht von sich aus noch einmal schicken. Der naechste
+      // Klick setzt sie neu.
+      wunsch = null;
+    },
   };
 }

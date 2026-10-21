@@ -85,17 +85,17 @@ describe('Die Leitung der Buehne', () => {
     const { wire, socket } = neueLeitung();
     // Genau die Verdrahtung der Buehne: der Oeffner wird nach dem
     // Pruefbericht gerufen, die Wiederverbindungen kommen von selbst.
-    const oeffne = createRoomOnce<unknown>(wire.socket, (quiz) =>
+    const sitzung = createRoomOnce<unknown>(wire.socket, (quiz) =>
       wire.send({ t: 'host:create', quiz } as never),
     );
 
     socket.feuere('connect');
-    oeffne({ title: 'T', questions: [] });
+    sitzung.oeffne({ title: 'T', questions: [] });
     vi.advanceTimersByTime(1_000);
-    oeffne({ title: 'T', questions: [] });
+    sitzung.oeffne({ title: 'T', questions: [] });
     socket.feuere('connect');
     socket.feuere('connect');
-    oeffne({ title: 'T', questions: [] });
+    sitzung.oeffne({ title: 'T', questions: [] });
     socket.feuere('connect');
     socket.feuere('connect');
     vi.advanceTimersByTime(30_000);

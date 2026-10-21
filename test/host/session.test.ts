@@ -59,36 +59,110 @@ describe('Raum genau einmal je Sitzung', () => {
   it('erzeugt den Raum beim Zuruf, wenn die Leitung schon steht', () => {
     const socket = fakeSocket();
     const gesehen: string[] = [];
-    const oeffne = createRoomOnce<string>(socket.source, (q) => gesehen.push(q));
+    const sitzung = createRoomOnce<string>(socket.source, (q) => gesehen.push(q));
     socket.connect();
-    oeffne('runde-a');
+    sitzung.oeffne('runde-a');
     expect(gesehen).toEqual(['runde-a']);
   });
 
   it('wartet auf die Leitung, wenn der Zuruf zuerst kommt', () => {
     const socket = fakeSocket();
     const gesehen: string[] = [];
-    const oeffne = createRoomOnce<string>(socket.source, (q) => gesehen.push(q));
-    oeffne('runde-a');
+    const sitzung = createRoomOnce<string>(socket.source, (q) => gesehen.push(q));
+    sitzung.oeffne('runde-a');
     expect(gesehen).toEqual([]);
     socket.connect();
     expect(gesehen).toEqual(['runde-a']);
   });
 
-  it('erzeugt bei jeder Wiederverbindung und jedem weiteren Klick KEINEN zweiten Raum', () => {
+  /**
+   * B2: Die fruehere Zusage lautete "erzeugt bei jeder Wiederverbindung und
+   * JEDEM WEITEREN KLICK keinen zweiten Raum". Sie war in dieser Form
+   * falsch: sie widersprach dem `room:error`-Pfad derselben Welle, der den
+   * Nutzer ausdruecklich zurueck auf den Fragen-Bildschirm schickt, damit
+   * er etwas aendern kann. Genau dieser Pfad war damit tot - die Buehne
+   * hing bis zum Neuladen.
+   *
+   * Richtig ist: solange ein Raum entsteht oder besteht, erzeugt kein
+   * weiterer Klick und keine Wiederverbindung einen zweiten Raum - nach
+   * einer Ablehnung ist ein neuer Versuch aber wieder moeglich. Die
+   * fruehere Zusage steht deshalb jetzt in drei Teilen, und jeder Teil ist
+   * einzeln gebunden.
+   */
+  it('vor der Leitung gewinnt der letzte Zuruf, nicht der erste', () => {
+    // Wer zweimal klickt, bevor die Leitung steht, hat beim zweiten Mal
+    // meistens etwas geaendert. Nicht ueberschriebene Wuensche hiessen:
+    // die Buehne spielt eine Fassung, die der Nutzer verworfen hat.
+    const socket = fakeSocket();
+    const gesehen: string[] = [];
+    const sitzung = createRoomOnce<string>(socket.source, (q) => gesehen.push(q));
+    sitzung.oeffne('erste-fassung');
+    sitzung.oeffne('korrigierte-fassung');
+    expect(gesehen).toEqual([]);
+    socket.connect();
+    expect(gesehen).toEqual(['korrigierte-fassung']);
+  });
+
+  it('zwei schnelle Klicks vor der ersten Antwort erzeugen nur einen Raum', () => {
+    const socket = fakeSocket();
+    const gesehen: string[] = [];
+    const sitzung = createRoomOnce<string>(socket.source, (q) => gesehen.push(q));
+    socket.connect();
+    sitzung.oeffne('a');
+    sitzung.oeffne('b');
+    sitzung.oeffne('c');
+    expect(gesehen).toEqual(['a']);
+  });
+
+  it('eine Wiederverbindung erzeugt keinen zweiten Raum', () => {
     const socket = fakeSocket();
     let erzeugt = 0;
-    const oeffne = createRoomOnce<string>(socket.source, () => {
+    const sitzung = createRoomOnce<string>(socket.source, () => {
       erzeugt += 1;
     });
     socket.connect();
-    oeffne('a');
-    oeffne('b');
-    socket.connect();
-    oeffne('c');
+    sitzung.oeffne('a');
     socket.connect();
     socket.connect();
     expect(erzeugt).toBe(1);
+  });
+
+  it('nach einer Ablehnung geht ein neuer Versuch - mit der korrigierten Fassung', () => {
+    const socket = fakeSocket();
+    const gesehen: string[] = [];
+    const sitzung = createRoomOnce<string>(socket.source, (q) => gesehen.push(q));
+    socket.connect();
+    sitzung.oeffne('kaputte-fassung');
+    sitzung.abgelehnt();
+    sitzung.oeffne('korrigierte-fassung');
+    expect(gesehen).toEqual(['kaputte-fassung', 'korrigierte-fassung']);
+  });
+
+  it('eine Ablehnung schickt von sich aus gar nichts nach', () => {
+    // Weder sofort noch bei der naechsten Wiederverbindung: die abgelehnte
+    // Sammlung wuerde sonst still ein zweites Mal gegen die Wand laufen.
+    const socket = fakeSocket();
+    const gesehen: string[] = [];
+    const sitzung = createRoomOnce<string>(socket.source, (q) => gesehen.push(q));
+    socket.connect();
+    sitzung.oeffne('kaputte-fassung');
+    sitzung.abgelehnt();
+    socket.connect();
+    socket.connect();
+    expect(gesehen).toEqual(['kaputte-fassung']);
+  });
+
+  it('nach der Ablehnung gilt der Doppelklick-Schutz wieder', () => {
+    const socket = fakeSocket();
+    const gesehen: string[] = [];
+    const sitzung = createRoomOnce<string>(socket.source, (q) => gesehen.push(q));
+    socket.connect();
+    sitzung.oeffne('a');
+    sitzung.abgelehnt();
+    sitzung.oeffne('b');
+    sitzung.oeffne('c');
+    socket.connect();
+    expect(gesehen).toEqual(['a', 'b']);
   });
 
   it('meldet jede Verbindung, damit die Buehne keinen eigenen Handler braucht', () => {
@@ -110,15 +184,20 @@ describe('Raum genau einmal je Sitzung', () => {
     const a = fakeSocket();
     const b = fakeSocket();
     const codes: string[] = [];
-    const oeffneA = createRoomOnce<string>(a.source, () => codes.push('a'));
-    const oeffneB = createRoomOnce<string>(b.source, () => codes.push('b'));
+    const sitzungA = createRoomOnce<string>(a.source, () => codes.push('a'));
+    const sitzungB = createRoomOnce<string>(b.source, () => codes.push('b'));
     a.connect();
     b.connect();
-    oeffneA('x');
-    oeffneA('x');
-    oeffneB('y');
-    oeffneB('y');
+    sitzungA.oeffne('x');
+    sitzungA.oeffne('x');
+    sitzungB.oeffne('y');
+    sitzungB.oeffne('y');
     expect(codes).toEqual(['a', 'b']);
+    // Und eine Ablehnung bleibt in ihrer Sitzung.
+    sitzungA.abgelehnt();
+    sitzungA.oeffne('x');
+    sitzungB.oeffne('y');
+    expect(codes).toEqual(['a', 'b', 'a']);
   });
 
   it('die Buehne benutzt den Wachter auch wirklich', () => {
@@ -128,6 +207,9 @@ describe('Raum genau einmal je Sitzung', () => {
     );
     expect(app).toContain("wire.send({ t: 'host:create', quiz })");
     expect(app).toContain('createRoomOnce<QuizPayload>(');
+    // B2: Ohne diesen Ruf ist der ganze room:error-Pfad folgenlos - der
+    // Nutzer aendert etwas, klickt, und nichts wird gesendet.
+    expect(app).toContain('oeffne.current?.abgelehnt()');
     // Ein roher connect-Handler in der Buehne waere genau der Rueckfall.
     //
     // NR1: Der Waechter darf nicht an der Anfuehrungsart haengen. Das Projekt
