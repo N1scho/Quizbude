@@ -859,7 +859,10 @@ function trenneBeiwerk(bloecke) {
     const hinweise = [];
     const rest = bloecke.slice();
     const erste = rest[0];
-    if (rest.length > 1 && erste !== undefined && !kannFrageSein(erste)) {
+    if (rest.length > 1 &&
+        erste !== undefined &&
+        !kannFrageSein(erste) &&
+        erste.antworten.length <= 1) {
         hinweise.push(`Zeile ${erste.nr}: als Vorwort uebersprungen.`);
         rest.shift();
     }

@@ -201,6 +201,30 @@ describe('Vorwort und Titelzeile zusammen (B5)', () => {
     expect(mit.questions.map((q) => q.prompt)).toEqual(['Welcher Planet?']);
   });
 
+  it('die erste Frage verschwindet nicht, nur weil ihr die Markierung fehlt (N2)', () => {
+    // N2: Der B5-Fix hat den Vorwort-Massstab von "keine Antworten" auf
+    // "kann keine Frage sein" verbreitert. Seitdem galt ein erster Block,
+    // der weder auf `?` endet noch eine Zeitangabe noch eine erkannte
+    // Markierung traegt, als Vorwort - und wurde verworfen. Der
+    // Pruefbericht meldete eine Frage weniger und "Alles in Ordnung".
+    const faelle: readonly (readonly [string, string])[] = [
+      ['Markierung nicht erkannt', 'Nenne den kleinsten Planeten\nMerkur [x]\nVenus'],
+      ['Markierung vergessen', 'Nenne den kleinsten Planeten\nMerkur\nVenus\nMars'],
+      ['Fett als Markierungsversuch', 'Nenne den kleinsten Planeten\n**Merkur**\nVenus'],
+    ];
+    for (const paar of faelle) {
+      const erg = parseQuiz(`${paar[1]}\n\nWelcher Planet ist rot? | 20\n* Mars\nVenus`);
+      // Zwei Fragen hinein, zwei Fragen heraus - und die erste faellt laut
+      // auf ihrer eigenen Zeile auf, statt still zu verschwinden.
+      expect(erg.questions, paar[0]).toHaveLength(2);
+      expect(erg.ok, paar[0]).toBe(false);
+      expect(erg.hinweise.join(' '), paar[0]).not.toContain('Vorwort');
+      expect(erg.fehler.map((f) => `${f.zeile}: ${f.text}`).join(' | '), paar[0]).toContain(
+        '1: keine Antwort markiert',
+      );
+    }
+  });
+
   it('eine Ueberschrift nach einer echten Frage ist kein Titel mehr', () => {
     // Die Gegenprobe zur Lockerung: sobald etwas gelesen wurde, das eine
     // Frage sein koennte, ist die Titelzeile vorbei.

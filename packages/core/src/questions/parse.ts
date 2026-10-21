@@ -608,9 +608,10 @@ interface Beiwerk {
 
 /**
  * Vorwort und Schlusswort einer KI-Antwort sind Beiwerk, keine Frage -
- * aber nur, wenn sie am Rand stehen, aus einer einzigen Zeile bestehen und
- * nicht wie eine Frage aussehen. Eine Frage, die der Autor ohne Antworten
- * gelassen hat, faellt weiterhin laut auf.
+ * aber nur, wenn sie am Rand stehen, kaum Zeilen haben und nicht wie eine
+ * Frage aussehen. Eine Frage, der nur die Markierung fehlt, faellt
+ * weiterhin laut auf: sie hat zwei oder mehr Antwortzeilen und gilt damit
+ * nie als Vorwort.
  */
 function trenneBeiwerk(bloecke: RohBlock[]): Beiwerk {
   const hinweise: string[] = [];
@@ -618,10 +619,29 @@ function trenneBeiwerk(bloecke: RohBlock[]): Beiwerk {
 
   // Ein mehrzeiliges Vorwort ("Klar!" / "Hier sind deine Fragen:") wird zu
   // einem Block, dessen zweite Zeile als Antwort gilt. Die Zahl der
-  // Antworten taugt deshalb nicht als Massstab - wohl aber die Frage, ob
-  // der Block ueberhaupt eine Frage sein koennte.
+  // Antworten taugt deshalb nicht allein als Massstab - dazu gehoert die
+  // Frage, ob der Block ueberhaupt eine Frage sein koennte.
+  //
+  // N2: Mit `kannFrageSein` allein verschwand die erste Frage still. Wer
+  // "Nenne den kleinsten Planeten" schreibt und die Markierung vergisst,
+  // hat keinen der drei Anhaltspunkte - kein Fragezeichen, keine
+  // Zeitangabe, keine erkannte Markierung -, und der Block galt als
+  // Vorwort. Der Pruefbericht meldete neun statt zehn Fragen und "Alles in
+  // Ordnung"; den Hinweis "Zeile 1: als Vorwort uebersprungen" liest
+  // niemand als Verlustmeldung. Stand dieselbe Frage an zweiter Stelle,
+  // fiel sie laut auf.
+  //
+  // Beide Masse zusammen trennen sauber: ein Vorwort hat hoechstens eine
+  // Folgezeile ("Klar!" / "Hier sind deine Fragen:"), eine Frage hat
+  // mindestens zwei Antworten - sonst beanstandet `pruefeUndBaue` sie
+  // ohnehin mit eigener Zeilennummer.
   const erste = rest[0];
-  if (rest.length > 1 && erste !== undefined && !kannFrageSein(erste)) {
+  if (
+    rest.length > 1 &&
+    erste !== undefined &&
+    !kannFrageSein(erste) &&
+    erste.antworten.length <= 1
+  ) {
     hinweise.push(`Zeile ${erste.nr}: als Vorwort uebersprungen.`);
     rest.shift();
   }
