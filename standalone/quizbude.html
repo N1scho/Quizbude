@@ -2242,9 +2242,14 @@ function renderStart(){
   }
 }
 
-function esc(s){
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
+/* B12: Die ausgelieferte Fassung aus dem Kern, keine zweite daneben. Der
+   Riegel aus tools/standalone-parser.mjs deckt den Kern-Block ab - eine
+   handgeschriebene Zwillingsfassung zog bei einer Aenderung dort nicht mit,
+   und von den sieben innerHTML-Stellen, die esc benutzen, war genau eine
+   durch einen Test gebunden. Die Zuweisung steht nach dem Kern-Block und
+   vor jedem Aufruf: esc wird nur aus Funktionen heraus benutzt, und boot()
+   laeuft ganz am Ende der Datei. */
+const esc = Kern.escapeHtml;
 
 function setzeKachel(el, display, anzahl, label, interaktiv){
   const farbIdx = tileColorIndex(display, anzahl);

@@ -112,6 +112,29 @@ describe('Ein Parser, zwei Fassungen', () => {
     expect(rumpf).toContain('const DEMO_TEXT = Kern.DEMO_TEXT;');
   });
 
+  it('die Seite haelt auch keine zweite Fassung des Escapings (B12)', () => {
+    // Der Riegel deckt den Kern-Block ab, nicht eine handgeschriebene
+    // Zwillingsfassung daneben. Wird `escapeHtml` im Kern einmal
+    // verbreitert, muss `esc` mitziehen - sonst bliebe von den sieben
+    // innerHTML-Stellen, die es benutzen, nur eine einzige gebunden.
+    const html = seite();
+    const rumpf = html.slice(html.indexOf(ENDE as string));
+    expect(rumpf).not.toMatch(/function\s+esc\s*\(/u);
+    expect(rumpf).toContain('const esc = Kern.escapeHtml;');
+    // Und es ist wirklich dieselbe Funktion, nicht nur derselbe Name.
+    const kern = kernAusSeite();
+    const esc = funktionAusSeite('esc', kern) as (s: unknown) => string;
+    expect(esc).toBe(kern['escapeHtml']);
+    // `const` wird nicht hochgezogen wie eine Funktionsdeklaration: die
+    // Zuweisung muss vor dem einzigen Aufruf am Dateiende stehen, sonst
+    // liefe die Seite in die zeitliche Totzone.
+    expect(rumpf.indexOf('const esc = Kern.escapeHtml;')).toBeGreaterThan(-1);
+    expect(rumpf.indexOf('const esc = Kern.escapeHtml;')).toBeLessThan(
+      rumpf.indexOf("if (typeof document !== 'undefined') boot();"),
+    );
+    expect(esc(`<a href="x">&'`)).toBe('&lt;a href=&quot;x&quot;&gt;&amp;&#39;');
+  });
+
   it('der ausgelieferte Block laeuft und liest die Demorunde', () => {
     const kern = kernAusSeite();
     const erg = (kern['parseQuiz'] as (t: string) => { ok: boolean; questions: unknown[] })(
