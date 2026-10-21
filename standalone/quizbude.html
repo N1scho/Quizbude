@@ -735,7 +735,7 @@ function leseBeschriftung(roh) {
     }
     let rest = roh;
     let markiert = false;
-    for (let runde = 0; runde < 8; runde += 1) {
+    for (;;) {
         const vorher = rest;
         rest = rest.replace(BESCHRIFTUNG, '').replace(PUNKT, '');
         if (istMarkiert(rest)) {

@@ -419,9 +419,25 @@ function leseBeschriftung(roh: string): { label: string; markiert: boolean } {
   // Die Schleife laeuft, bis nichts mehr greift. Damit ist die Reihenfolge
   // innerhalb einer Runde nicht mehr tragend, sondern nur noch das, was
   // jede Runde abtraegt.
+  //
+  // N1: Sie hatte einen Deckel von acht Runden, und der fiel nach oben
+  // offen aus - ab der neunten Markierung blieb das Haekchen im sichtbaren
+  // Label stehen, waehrend der Pruefbericht gruen blieb. Genau der Schaden,
+  // gegen den B1 angetreten ist, nur eine Runde weiter hinten.
+  //
+  // Der Deckel ist weg, und die Terminierung haengt jetzt allein am Abbruch
+  // bei unveraenderter Zeile. Das traegt, weil KEINE der vier beteiligten
+  // Regexe auf dem leeren String greifen kann: BESCHRIFTUNG verlangt
+  // Zeichen + `).:` + Leerraum (mindestens drei), PUNKT ein
+  // Aufzaehlungszeichen + Leerraum (mindestens zwei), MARKIERUNG und
+  // LEERKASTEN je mindestens ein Zeichen aus ihrer Klasse - die `\s*` am
+  // Ende sind der einzige Teil, der leer bleiben darf. Jede Runde traegt
+  // deshalb entweder mindestens ein Zeichen ab oder gar keines; traegt sie
+  // keines ab, ist `rest === vorher` und die Schleife bricht. Es gibt keine
+  // Eingabe, unter der sie laenger als `roh.length` Runden laeuft.
   let rest = roh;
   let markiert = false;
-  for (let runde = 0; runde < 8; runde += 1) {
+  for (;;) {
     const vorher = rest;
     rest = rest.replace(BESCHRIFTUNG, '').replace(PUNKT, '');
     if (istMarkiert(rest)) {

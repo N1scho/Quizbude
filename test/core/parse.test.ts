@@ -341,6 +341,79 @@ describe('Die Nachsichten gekreuzt, nicht aufgezaehlt (B1/B6)', () => {
     }
   });
 
+  /**
+   * N1: Die Abtrag-Schleife hatte einen Deckel von acht Runden, und der
+   * fiel nach oben offen aus. Ab der neunten Markierung in derselben Zeile
+   * blieb das Haekchen im sichtbaren Label stehen - bei `ok=true`, ohne
+   * eine einzige Meldung. Das ist genau der Schaden von B1: die richtige
+   * Antwort steht auf der Kachel, bevor jemand tippt. Die Kreuzproben oben
+   * fahren hoechstens zwei Markierungen und erreichen die achte Runde nie.
+   */
+  const vieleMarkierungen = (n: number): readonly (readonly [string, string])[] => [
+    [`${n} Haekchen vorn`, `${'✅'.repeat(n)} Merkur\nVenus`],
+    [`Stern und ${n} Haekchen`, `* ${'✅'.repeat(n)} Merkur\nVenus`],
+    [`${n} Kreuzkaesten`, `${'[x]'.repeat(n)} Merkur\nVenus`],
+    [
+      `${n} Haekchen im JSON`,
+      JSON.stringify({ fragen: [{ frage: 'F?', antworten: [`${'✅'.repeat(n)} Merkur`, 'Venus'] }] }),
+    ],
+  ];
+
+  it('die neunte, die zwanzigste und die zweihundertste Markierung werden ebenso abgetragen (N1)', () => {
+    for (const n of [8, 9, 12, 20, 200]) {
+      for (const paar of vieleMarkierungen(n)) {
+        const text = paar[1].startsWith('{') ? paar[1] : `Frage? | 20\n${paar[1]}`;
+        const erg = parseQuiz(text);
+        expect(erg.fehler, paar[0]).toEqual([]);
+        expect(erg.ok, paar[0]).toBe(true);
+        const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+        expect(spec.options.map((o) => o.label), paar[0]).toEqual(['Merkur', 'Venus']);
+        expect(spec.correctIndex, paar[0]).toBe(0);
+      }
+    }
+  });
+
+  it('nichts Gruenes traegt ein Markierungszeichen im Label - fuer jede Zahl von Markierungen (N1)', () => {
+    // Die Zusicherung selbst, nicht der Einzelfall: schafft der Parser den
+    // Abtrag fuer eine Eingabe einmal nicht, muss er `ok=false` liefern.
+    // Gruen UND ein Markierungszeichen auf der Kachel darf es nicht geben.
+    const VERRAETERISCH = /[✅✔✓☑☐❌✗]/u;
+    for (let n = 1; n <= 40; n += 1) {
+      for (const paar of vieleMarkierungen(n)) {
+        const text = paar[1].startsWith('{') ? paar[1] : `Frage? | 20\n${paar[1]}`;
+        const erg = parseQuiz(text);
+        const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec | undefined;
+        for (const o of spec?.options ?? []) {
+          expect(erg.ok && VERRAETERISCH.test(o.label), `${paar[0]}: ${o.label}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it(
+    'der Abtrag bleibt auch am Dateideckel bezahlbar (N1)',
+    () => {
+      // Der unguenstigste Fall, den MAX_UPLOAD_BYTES zulaesst: ein Haekchen
+      // sind drei Bytes in UTF-8, 333 333 davon fuellen die ganze erlaubte
+      // Datei mit einer einzigen Antwortzeile.
+      //
+      // Die Zahl steht hier nicht aus Sportsgeist. Mit dem Deckel von acht
+      // Runden blieb der Rest der Haekchen stehen, und `MARKIERUNG_ENDE`
+      // suchte ihn von jeder Zeichenstelle aus neu ab - quadratisch:
+      // gemessen 0,6 s bei 16 000 Haekchen, 9,1 s bei 64 000, hochgerechnet
+      // Minuten am Dateideckel. Ohne den Deckel traegt die Schleife den
+      // Lauf vorn ab, und `MARKIERUNG_ENDE` sieht nur noch "Merkur".
+      const t0 = performance.now();
+      const erg = parseQuiz(`Frage? | 20\n${'✅'.repeat(333_333)} Merkur\nVenus`);
+      const ms = performance.now() - t0;
+      expect(erg.ok).toBe(true);
+      const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+      expect(spec.options.map((o) => o.label)).toEqual(['Merkur', 'Venus']);
+      expect(ms, `${ms.toFixed(0)} ms`).toBeLessThan(5_000);
+    },
+    20_000,
+  );
+
   it('ein leerer Kasten markiert auch am Zeilenende nicht', () => {
     // Ruling 4: `[ ]`, ☐, ❌ und ✗ sind keine Markierung - vorn nicht und
     // hinten nicht. Auf die Kachel gehoeren sie trotzdem nicht.
