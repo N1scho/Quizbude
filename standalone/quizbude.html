@@ -784,6 +784,9 @@ function wirktWieFrage(text) {
     const t = text.trim();
     return t.endsWith('?') || ZEIT.test(t);
 }
+function kannFrageSein(b) {
+    return wirktWieFrage(b.promptRoh) || b.antworten.some((a) => a.markiert);
+}
 function zuBloecken(zeilen) {
     const bloecke = [];
     const fehler = [];
@@ -791,8 +794,11 @@ function zuBloecken(zeilen) {
     let titelErlaubt = true;
     let aktuell = null;
     const schliessen = () => {
-        if (aktuell !== null)
+        if (aktuell !== null) {
             bloecke.push(aktuell);
+            if (kannFrageSein(aktuell))
+                titelErlaubt = false;
+        }
         aktuell = null;
     };
     for (const zeile of zeilen) {
@@ -801,7 +807,10 @@ function zuBloecken(zeilen) {
             schliessen();
             continue;
         }
-        if (titelErlaubt && text.startsWith('#')) {
+        if (text.startsWith('#') &&
+            titelErlaubt &&
+            (aktuell === null || !kannFrageSein(aktuell))) {
+            schliessen();
             const t = entferneAuszeichnung(text.replace(/^#+\s*/, '')).trim();
             if (t !== '')
                 titel = t;
@@ -809,7 +818,6 @@ function zuBloecken(zeilen) {
             continue;
         }
         if (aktuell === null) {
-            titelErlaubt = false;
             if (text.startsWith('>')) {
                 fehler.push({
                     zeile: zeile.nr,
@@ -843,10 +851,7 @@ function trenneBeiwerk(bloecke) {
     const hinweise = [];
     const rest = bloecke.slice();
     const erste = rest[0];
-    if (rest.length > 1 &&
-        erste !== undefined &&
-        erste.antworten.length === 0 &&
-        !wirktWieFrage(erste.promptRoh)) {
+    if (rest.length > 1 && erste !== undefined && !kannFrageSein(erste)) {
         hinweise.push(`Zeile ${erste.nr}: als Vorwort uebersprungen.`);
         rest.shift();
     }
@@ -1127,6 +1132,52 @@ function siehtNachJsonAus(text) {
     const t = text.trim();
     return t.startsWith('{') || t.startsWith('[');
 }
+function lesbaresJson(text) {
+    try {
+        JSON.parse(text);
+        return true;
+    }
+    catch {
+    }
+    try {
+        JSON.parse(geradeAnfuehrung(text));
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+function jsonNachBeiwerk(zeilen) {
+    var _a, _b;
+    let von = -1;
+    for (let i = 0; i < zeilen.length; i += 1) {
+        const z = zeilen[i];
+        if (z !== undefined && siehtNachJsonAus(z.text)) {
+            von = i;
+            break;
+        }
+    }
+    if (von <= 0)
+        return null;
+    let bis = zeilen.length - 1;
+    while (bis > von && !/[}\]]\s*$/.test((_b = (_a = zeilen[bis]) === null || _a === void 0 ? void 0 : _a.text) !== null && _b !== void 0 ? _b : ''))
+        bis -= 1;
+    const text = zeilen
+        .slice(von, bis + 1)
+        .map((z) => z.text)
+        .join('\n')
+        .trim();
+    if (!lesbaresJson(text))
+        return null;
+    const hinweise = [];
+    const vorwort = zeilen.find((z) => z.text.trim() !== '');
+    if (vorwort !== undefined)
+        hinweise.push(`Zeile ${vorwort.nr}: als Vorwort uebersprungen.`);
+    const schluss = zeilen.slice(bis + 1).find((z) => z.text.trim() !== '');
+    if (schluss !== undefined)
+        hinweise.push(`Zeile ${schluss.nr}: als Schlusswort uebersprungen.`);
+    return { text, hinweise };
+}
 function parseQuiz(raw) {
     const text = normalisiereText(raw);
     const alleZeilen = text.split('\n').map((t, i) => ({ nr: i + 1, text: t }));
@@ -1152,6 +1203,11 @@ function parseQuiz(raw) {
     }
     if (siehtNachJsonAus(kern))
         return parseJson(kern, ohneZaun);
+    const alsJson = jsonNachBeiwerk(ohneZaun);
+    if (alsJson !== null) {
+        const erg = parseJson(alsJson.text, ohneZaun);
+        return { ...erg, hinweise: [...alsJson.hinweise, ...erg.hinweise] };
+    }
     const { bloecke, titel, fehler } = zuBloecken(ohneZaun);
     const getrennt = trenneBeiwerk(bloecke);
     if (getrennt.bloecke.length === 0) {

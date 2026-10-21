@@ -166,6 +166,130 @@ describe('Beiwerk des Werkzeugs wird stillschweigend verdaut', () => {
   });
 });
 
+describe('Vorwort und Titelzeile zusammen (B5)', () => {
+  /**
+   * Jede Nachsicht einzeln war getestet: "Titel allein" gruen, "Vorwort
+   * allein" gruen. Zusammen fiel es - das Vorwort gab die Titelzeile auf,
+   * `# Abendrunde` wurde als Fragetext gelesen, blieb ohne Antworten und
+   * erzeugte zwei Fehler. Der Nutzer las "Diese Frage hat keine Antwort"
+   * ueber einer Zeile, die keine Frage ist.
+   */
+  const EINE = 'Welcher Planet? | 20\n* Merkur\nVenus';
+
+  it('Vorwort und Titelzeile, mit und ohne Leerzeile dazwischen', () => {
+    for (const trenner of ['\n\n', '\n']) {
+      const erg = parseQuiz(`Hier sind deine Fragen:${trenner}# Abendrunde${trenner}${EINE}`);
+      expect(erg.fehler, trenner).toEqual([]);
+      expect(erg.ok, trenner).toBe(true);
+      expect(erg.titel, trenner).toBe('Abendrunde');
+      expect(erg.questions.map((q) => q.prompt), trenner).toEqual(['Welcher Planet?']);
+      expect(erg.hinweise.join(' '), trenner).toContain('Vorwort');
+    }
+  });
+
+  it('ein mehrzeiliges Vorwort, auch vor der Titelzeile', () => {
+    // Zweite Zeile des Vorworts wird sonst zur einzigen Antwort einer
+    // Frage, die gar keine ist.
+    const ohne = parseQuiz(`Klar!\nHier sind deine Fragen:\n\n${EINE}`);
+    expect(ohne.fehler).toEqual([]);
+    expect(ohne.questions.map((q) => q.prompt)).toEqual(['Welcher Planet?']);
+
+    const mit = parseQuiz(`Klar!\nHier sind deine Fragen:\n\n# Abendrunde\n\n${EINE}`);
+    expect(mit.fehler).toEqual([]);
+    expect(mit.titel).toBe('Abendrunde');
+    expect(mit.questions.map((q) => q.prompt)).toEqual(['Welcher Planet?']);
+  });
+
+  it('eine Ueberschrift nach einer echten Frage ist kein Titel mehr', () => {
+    // Die Gegenprobe zur Lockerung: sobald etwas gelesen wurde, das eine
+    // Frage sein koennte, ist die Titelzeile vorbei.
+    const erg = parseQuiz(`${EINE}\n\n# Spaeter`);
+    expect(erg.titel).toBe('Quizbude');
+    expect(erg.questions.map((q) => q.prompt)).toEqual(['Welcher Planet?']);
+  });
+
+  it('JSON im Code-Zaun wird auch unter einem Vorwort als JSON gelesen', () => {
+    // Die Erkennung lief auf dem Text ohne Zaun, aber mit Vorwort - und
+    // fiel deshalb ins Zeilenformat zurueck.
+    const text = [
+      'Klar, hier ist die Datei:',
+      '',
+      '```json',
+      '{"titel":"Abendrunde","fragen":[{"frage":"F?","antworten":["*A","B"]}]}',
+      '```',
+      '',
+      'Viel Spass!',
+    ].join('\n');
+    const erg = parseQuiz(text);
+    expect(erg.fehler).toEqual([]);
+    expect(erg.quelle).toBe('json');
+    expect(erg.titel).toBe('Abendrunde');
+    expect(erg.questions).toHaveLength(1);
+    expect(erg.hinweise.join(' ')).toContain('Vorwort');
+  });
+
+  it('kaputtes JSON unter einem Vorwort wird nicht zu JSON erklaert', () => {
+    // Verschoben wird nur, was sich wirklich als JSON lesen laesst.
+    const erg = parseQuiz('Klar:\n\n{ "fragen": [ ');
+    expect(erg.quelle).toBe('zeilen');
+  });
+
+  it('der Leitfall des Reviews, alle Nachsichten in EINER Eingabe', () => {
+    // Vorwort + Code-Zaun + Nummerierung + A)-Beschriftung + Fett im
+    // Fragetext + Haekchen als Markierung + Schlusswort. Jede Nachsicht
+    // fuer sich war getestet; genau diese Kombination fiel.
+    const text = [
+      'Hier sind deine Fragen:',
+      '',
+      '```text',
+      '# Abendrunde',
+      '',
+      '1. **Welcher Planet ist der Sonne am naechsten?** | 20',
+      '* A) ✅ Merkur',
+      'B) Venus',
+      'C) Mars',
+      '```',
+      '',
+      'Viel Spass!',
+    ].join('\n');
+    const erg = parseQuiz(text);
+    expect(erg.fehler).toEqual([]);
+    expect(erg.ok).toBe(true);
+    expect(erg.titel).toBe('Abendrunde');
+    expect(erg.questions).toHaveLength(1);
+    expect(erg.questions[0]?.prompt).toBe('Welcher Planet ist der Sonne am naechsten?');
+    expect(erg.questions[0]?.timeLimitMs).toBe(20_000);
+    const spec = erg.questions[0]?.spec as ParsedSingleChoiceSpec;
+    expect(spec.options.map((o) => o.label)).toEqual(['Merkur', 'Venus', 'Mars']);
+    expect(spec.correctIndex).toBe(0);
+    // Und der Kern nimmt an, was dabei herauskommt.
+    const registry = createDefaultRegistry();
+    for (const q of erg.questions) expect(() => loadQuestion(q, registry)).not.toThrow();
+  });
+
+  it('die Zeilennummern zeigen die Originaleingabe, auch hinter Vorwort und Zaun', () => {
+    // Gemessen und richtig - und darf durch die Lockerung oben nicht
+    // kaputtgehen: der Nutzer sucht sonst in seiner Datei an der falschen
+    // Stelle. Zeile 6 ist die zweite markierte Antwort IM ORIGINAL.
+    const text = [
+      'Hier sind deine Fragen:',
+      '',
+      '```',
+      'F? | 20',
+      '* Merkur',
+      '* Venus',
+      '```',
+      '',
+      'Viel Spass',
+    ].join('\n');
+    expect(meldungen(text)).toEqual(['Zeile 6: 2 Antworten markiert, genau eine darf es sein.']);
+    expect(parseQuiz(text).hinweise).toEqual([
+      'Zeile 1: als Vorwort uebersprungen.',
+      'Zeile 9: als Schlusswort uebersprungen.',
+    ]);
+  });
+});
+
 describe('Die Nachsichten gekreuzt, nicht aufgezaehlt (B1/B6)', () => {
   /**
    * Jede Nachsicht fuer sich war getestet und funktionierte; die

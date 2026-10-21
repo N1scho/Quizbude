@@ -469,6 +469,20 @@ function wirktWieFrage(text: string): boolean {
   return t.endsWith('?') || ZEIT.test(t);
 }
 
+/**
+ * Koennte dieser Block ueberhaupt eine Frage sein?
+ *
+ * Beiwerk eines Sprachmodells endet nicht auf ein Fragezeichen, traegt
+ * keine Zeitangabe und hat keine markierte Antwort. Derselbe Massstab
+ * entscheidet zweierlei: ob ein Block am Rand als Vorwort uebersprungen
+ * wird und ob die Titelzeile noch erlaubt ist. Nur so haelt auch ein
+ * mehrzeiliges Vorwort, dessen zweite Zeile sonst zur einzigen Antwort
+ * einer Frage wird, die keine ist.
+ */
+function kannFrageSein(b: RohBlock): boolean {
+  return wirktWieFrage(b.promptRoh) || b.antworten.some((a) => a.markiert);
+}
+
 function zuBloecken(zeilen: readonly Zeile[]): {
   bloecke: RohBlock[];
   titel: string;
@@ -481,7 +495,12 @@ function zuBloecken(zeilen: readonly Zeile[]): {
   let aktuell: RohBlock | null = null;
 
   const schliessen = (): void => {
-    if (aktuell !== null) bloecke.push(aktuell);
+    if (aktuell !== null) {
+      bloecke.push(aktuell);
+      // B5: Erst ein Block, der eine Frage sein koennte, beendet die
+      // Titelzeile. Ein Vorwort darf ihr nicht die Tuer zuschlagen.
+      if (kannFrageSein(aktuell)) titelErlaubt = false;
+    }
     aktuell = null;
   };
 
@@ -492,7 +511,20 @@ function zuBloecken(zeilen: readonly Zeile[]): {
       continue;
     }
 
-    if (titelErlaubt && text.startsWith('#')) {
+    // B5: Die Titelzeile bleibt erlaubt, solange nichts gelesen wurde, was
+    // eine Frage sein koennte - auch der offene Block zaehlt. Vorher gab
+    // die erste Zeile Beiwerk sie auf, und `# Abendrunde` wurde als
+    // Fragetext gelesen: ohne Antworten, mit zwei Fehlern ueber einer
+    // Zeile, die gar keine Frage ist. Das ist die haeufigste KI-Ausgabe
+    // ueberhaupt ("Klar! Hier sind deine Fragen:" plus Titel).
+    if (
+      text.startsWith('#') &&
+      titelErlaubt &&
+      (aktuell === null || !kannFrageSein(aktuell))
+    ) {
+      // Eine Ueberschrift trennt. Ohne das Schliessen wuerde die naechste
+      // Frage zur Antwort des Vorworts darueber.
+      schliessen();
       const t = entferneAuszeichnung(text.replace(/^#+\s*/, '')).trim();
       if (t !== '') titel = t;
       titelErlaubt = false;
@@ -500,7 +532,6 @@ function zuBloecken(zeilen: readonly Zeile[]): {
     }
 
     if (aktuell === null) {
-      titelErlaubt = false;
       if (text.startsWith('>')) {
         fehler.push({
           zeile: zeile.nr,
@@ -549,13 +580,12 @@ function trenneBeiwerk(bloecke: RohBlock[]): Beiwerk {
   const hinweise: string[] = [];
   const rest = bloecke.slice();
 
+  // Ein mehrzeiliges Vorwort ("Klar!" / "Hier sind deine Fragen:") wird zu
+  // einem Block, dessen zweite Zeile als Antwort gilt. Die Zahl der
+  // Antworten taugt deshalb nicht als Massstab - wohl aber die Frage, ob
+  // der Block ueberhaupt eine Frage sein koennte.
   const erste = rest[0];
-  if (
-    rest.length > 1 &&
-    erste !== undefined &&
-    erste.antworten.length === 0 &&
-    !wirktWieFrage(erste.promptRoh)
-  ) {
+  if (rest.length > 1 && erste !== undefined && !kannFrageSein(erste)) {
     hinweise.push(`Zeile ${erste.nr}: als Vorwort uebersprungen.`);
     rest.shift();
   }
@@ -879,6 +909,65 @@ export function siehtNachJsonAus(text: string): boolean {
   return t.startsWith('{') || t.startsWith('[');
 }
 
+/** Laesst sich der Text als JSON lesen - notfalls nach geraden Anfuehrungen? */
+function lesbaresJson(text: string): boolean {
+  try {
+    JSON.parse(text);
+    return true;
+  } catch {
+    // Eine KI setzt im Fliesstext gern typografische Anfuehrungszeichen.
+  }
+  try {
+    JSON.parse(geradeAnfuehrung(text));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * JSON unter einem Vorwort (B5).
+ *
+ * `siehtNachJsonAus` lief auf dem Text ohne Zaun, aber MIT Vorwort - und
+ * fiel deshalb bei "Klar, hier ist deine Datei:" plus JSON-Block ins
+ * Zeilenformat zurueck. Gesucht wird darum ab der ersten Zeile, die wie
+ * JSON anfaengt, bis zur letzten, die wie JSON aufhoert. Verschoben wird
+ * nur, was sich danach wirklich als JSON lesen laesst; alles andere bleibt
+ * beim Zeilenformat. Die Zeilennummern der Originaldatei bleiben erhalten,
+ * weil `parseJson` weiter die ungekuerzte Zeilenliste bekommt.
+ */
+function jsonNachBeiwerk(
+  zeilen: readonly Zeile[],
+): { readonly text: string; readonly hinweise: readonly string[] } | null {
+  let von = -1;
+  for (let i = 0; i < zeilen.length; i += 1) {
+    const z = zeilen[i];
+    if (z !== undefined && siehtNachJsonAus(z.text)) {
+      von = i;
+      break;
+    }
+  }
+  // `von === 0` haette schon `siehtNachJsonAus` auf dem ganzen Text erkannt.
+  if (von <= 0) return null;
+
+  let bis = zeilen.length - 1;
+  while (bis > von && !/[}\]]\s*$/.test(zeilen[bis]?.text ?? '')) bis -= 1;
+
+  const text = zeilen
+    .slice(von, bis + 1)
+    .map((z) => z.text)
+    .join('\n')
+    .trim();
+  if (!lesbaresJson(text)) return null;
+
+  const hinweise: string[] = [];
+  const vorwort = zeilen.find((z) => z.text.trim() !== '');
+  if (vorwort !== undefined) hinweise.push(`Zeile ${vorwort.nr}: als Vorwort uebersprungen.`);
+  const schluss = zeilen.slice(bis + 1).find((z) => z.text.trim() !== '');
+  if (schluss !== undefined) hinweise.push(`Zeile ${schluss.nr}: als Schlusswort uebersprungen.`);
+  return { text, hinweise };
+}
+
 export function parseQuiz(raw: string): ParseErgebnis {
   const text = normalisiereText(raw);
   const alleZeilen: Zeile[] = text.split('\n').map((t, i) => ({ nr: i + 1, text: t }));
@@ -909,6 +998,12 @@ export function parseQuiz(raw: string): ParseErgebnis {
   }
 
   if (siehtNachJsonAus(kern)) return parseJson(kern, ohneZaun);
+
+  const alsJson = jsonNachBeiwerk(ohneZaun);
+  if (alsJson !== null) {
+    const erg = parseJson(alsJson.text, ohneZaun);
+    return { ...erg, hinweise: [...alsJson.hinweise, ...erg.hinweise] };
+  }
 
   const { bloecke, titel, fehler } = zuBloecken(ohneZaun);
   const getrennt = trenneBeiwerk(bloecke);
