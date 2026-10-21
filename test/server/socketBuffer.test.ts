@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import { io as ioClient } from 'socket.io-client';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { importSpezifizierer } from '../quelltext.js';
 import { WIRE_CHANNEL } from '@quizbude/protocol';
 import { MAX_UPLOAD_BYTES, parseQuiz } from '@quizbude/core';
 import { createSocketServer } from '../../packages/server/src/transport/socketio/server.js';
@@ -91,24 +92,34 @@ describe('Der Puffer am Draht traegt jede erlaubte Datei (B3)', () => {
     expect(JSON.stringify('\u0001')).toHaveLength('"\\u0001"'.length);
   });
 
-  it('main.ts baut keinen eigenen Socket-Server mehr, sondern nimmt den gebundenen', () => {
+  it('main.ts kommt an keinen eigenen Socket-Server heran (B-4)', () => {
     // N3: Der Waechter stand frueher auf dem Wortlaut
     // `maxHttpBufferSize: MAX_SOCKET_MESSAGE_BYTES` in `main.ts`. Er hielt
     // genau so lange, wie der Text dort stand - EINE Zeile dahinter
     // (`io.engine.opts.maxHttpBufferSize = 1e6;`) stellte B3 vollstaendig
     // wieder her, bei 309/309 gruen und `tsc` Exit 0.
     //
-    // Die Masse stehen jetzt in `transport/socketio/server.ts` und sind
-    // unten am laufenden Server gebunden. Hier bleibt die kleine Frage:
-    // nimmt `main.ts` wirklich den gebundenen Server? Alles Weitere traegt
-    // das Typsystem - ohne ein `io` im Gueltigkeitsbereich gibt es dort
-    // nichts mehr, worauf sich eine solche Zeile stuetzen koennte.
+    // B-4: Sein Nachfolger las `not.toContain('new Server(')` und war damit
+    // genauso umgehbar. `import { Server as S } from 'socket.io'` plus
+    // `new S(http, …)` liess den gewachten Text woertlich in einem toten
+    // Zweig stehen - 318/318 gruen, `tsc` 0, `build` 0, und B3 waere am
+    // Abend zurueck gewesen.
+    //
+    // Gezaehlt wird deshalb nicht mehr Text, sondern die Modulkante, und
+    // zwar mit dem TypeScript-Parser statt mit einem regulaeren Ausdruck -
+    // dieselbe Lehre wie bei der Importpruefung in `test/quelltext.ts`.
+    // `main.ts` bindet `socket.io` ueberhaupt nicht ein: weder statisch,
+    // noch per `require`, noch dynamisch, und unter keinem Aliasnamen. Ohne
+    // diesen Import gibt es dort kein `Server`, aus dem sich ein zweiter,
+    // ungebundener Socket-Server bauen liesse; was `main.ts` hochfaehrt,
+    // kann nur aus der gebundenen Fabrik kommen.
     const quelle = readFileSync(
       fileURLToPath(new URL('../../packages/server/src/main.ts', import.meta.url)),
       'utf8',
     );
-    expect(quelle).toContain('attachGateway(createSocketServer(http))');
-    expect(quelle).not.toContain('new Server(');
+    const importe = importSpezifizierer(quelle, 'main.ts');
+    expect(importe).not.toContain('socket.io');
+    expect(importe).toContain('./transport/socketio/server.js');
   });
 });
 
