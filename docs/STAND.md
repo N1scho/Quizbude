@@ -1,17 +1,18 @@
 # Quizbude — Stand
 
-**Letzter Arbeitstag:** 2026-10-20 · **Branch:** `durchstich` (nicht nach `main` gemerged)
+**Letzter Arbeitstag:** 2026-10-21 · **Branch:** `durchstich` (nicht nach `main` gemerged)
 
 ## Wo wir stehen
 
-Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, Ein-Klick-Start gebaut, Ein-Klick-Start reviewt und die Befunde behoben, **eigene Fragen hochladen gebaut** (noch nicht reviewt).
+Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, Ein-Klick-Start gebaut, Ein-Klick-Start reviewt und die Befunde behoben, eigene Fragen hochladen gebaut, **Fragen-Upload reviewt und die Befunde behoben** (fünfte Welle, noch nicht nachreviewt).
 
 **Selbst nachgemessen am Ende des Tages** (nicht aus Berichten übernommen):
 
 ```
-npm test        276 Tests, 26 Dateien, grün, Exit 0
+npm test        309 Tests, 27 Dateien, grün, Exit 0
 npx tsc         Exit 0  (strict: true aus tsconfig.base.json)
 npm run build   Exit 0  (Spielergerät: kritischer Pfad 63,45 kB gzip, unverändert)
+Riegel          node tools/standalone-parser.mjs — aktuell, Exit 0
 Arbeitsbaum     sauber
 ```
 
@@ -82,9 +83,36 @@ Jemand lässt sich von seiner KI Fragen schreiben, lädt die Ausgabe hoch, das Q
 
 **Nicht einhaltbare Vorgabe, ausdrücklich abgewichen:** `transport/` sollte unberührt bleiben. Ohne eine Änderung in `gateway.ts` und `validate.ts` würde die Bühne aber immer die Demorunde spielen, egal was hochgeladen wird. Geändert sind 15 bzw. 22 Zeilen; die inhaltliche Prüfung liegt weiterhin in `loadQuestion`. `runtime/` ist unberührt. Begründung und Rückbauoption in `bericht-fragen-upload.md` Abschnitt 8.
 
-**Noch zu tun:** `standalone/quizbude.html` muss als Artifact **neu veröffentlicht** werden. Die verlinkte Fassung spielt sonst weiter mit dem alten Parser und ohne Hochladen.
+**Noch zu tun:** `standalone/quizbude.html` muss als Artifact **neu veröffentlicht** werden. Die verlinkte Fassung spielt sonst weiter mit dem alten Parser und ohne Hochladen. Die Veröffentlichung gehört hinter das Nachreview der fünften Welle.
 
 Die Proben haben drei frische Tests als wertlos entlarvt (Code-Zaun, Normalisierung, Zeilenenden) und einen echten Fehler gefunden: der Riegel verglich die Zeilenenden mit und wäre nach jedem frischen Klon auf Windows rot gewesen. Einzelheiten, 43 Rücknahmeproben mit Wortlaut, in `bericht-fragen-upload.md`.
+
+## Was das Review des Fragen-Uploads ergeben hat
+
+Zwölf Befunde, davon vier blockierend. Der gemeinste war der stillste: `* ✅ Merkur` — Stern **und** Häkchen, die häufigste Mischform echter KI-Ausgaben — ging grün durch und schrieb das Häkchen auf die Kachel. Jeder im Raum sah die richtige Antwort, bevor er tippte; nichts meldete etwas. Daneben zwei Fälle, in denen ein grüner Prüfbericht eine Nutzlast erzeugte, die der Server stillschweigend verwarf oder an der die Verbindung abriss — und ein Fehlerpfad, der nie wieder aus sich herausfand.
+
+Drei Mutationsproben des Reviews waren grün bei 276/276; zwei davon (B10) hat die fünfte Welle geschlossen, eine (B11) gehört in das nächste Transport-Paket. Der Bericht liegt als `review-fragen-upload.md`.
+
+| | Befund | Stand |
+|---|---|---|
+| B1 | `* ✅ Merkur` ging grün durch, das Häkchen blieb im Antworttext stehen und verriet die Antwort auf der Leinwand | behoben, `e72eac3` |
+| B2 | Nach einer Ablehnung konnte die Bühne nie wieder eröffnen — der `room:error`-Pfad war in der Praxis tot | behoben, `e2593c2` |
+| B3 | Eine erlaubte Datei riss die Verbindung ab: `maxHttpBufferSize` stand auf der Socket.IO-Vorgabe von 1e6 Bytes | behoben, `c2a5680` |
+| B4 | Ein Titel über 256 Zeichen wurde grün geprüft und am Transportrand stillschweigend verworfen | behoben, `25e4409` |
+| B5 | Vorwort **plus** Titelzeile machte aus dem Titel eine Frage ohne Antwort — die häufigste KI-Ausgabe überhaupt | behoben, `4f8cef9` |
+| B6 | `A) ✅ Merkur` und `Merkur ✅` verloren die Markierung ganz | behoben, `e72eac3` |
+| B7 | `loadQuestion` lässt Zahl und Erklärung ohne Obergrenze durch | offen, zweite Welle |
+| B8 | `host:create` ohne Deckel, Räume werden nie freigegeben | offen, zweite Welle |
+| B9 | `host:create` überschreibt die Raumbindung eines Spieler-Sockets | offen, zweite Welle |
+| B10 | „Erst der Prüfbericht, dann die Lobby“ war in **beiden** Fassungen ungebunden | gebunden, `7b1024d` |
+| B11 | Der Riegel „nur der Gastgeber schaltet weiter“ ist ungebunden | offen, nächstes Transport-Paket |
+| B12 | Zweite, handgeschriebene Fassung der Escaping-Funktion in der Browser-Fassung | behoben, `c05b2c9` |
+
+**Die Lehre dieser Welle:** jede Nachsicht des Parsers war einzeln getestet und funktionierte einzeln. Gebrochen ist die **Kombination** — Vorwort *und* Titel, Beschriftung *und* Häkchen, Stern *und* Häkchen. Tests, die Nachsichten aufzählen, sagen nichts über Eingaben, die mehrere zugleich tragen; genau so sehen echte KI-Ausgaben aber aus. Die neuen Tests **kreuzen** sie deshalb und führen den Leitfall des Reviews als eine einzige Eingabe mit.
+
+Eine Alt-Zusage ist dabei ausdrücklich korrigiert worden: „erzeugt bei jeder Wiederverbindung und jedem weiteren Klick KEINEN zweiten Raum“ war in dieser Form falsch und widersprach dem `room:error`-Pfad derselben Welle. Sie steht jetzt in sechs Teilen, jeder einzeln gebunden. Einzelheiten, 26 Mutationsproben mit Wortlaut, in `bericht-welle5-fragen-upload.md`.
+
+Nebenbei festgehalten: **Gesetz 0 hält auch für hochgeladene Inhalte.** Fragetext, Antworttext, Erklärung und Titel als Marker durch Upload → Raum → Spielergerät — keiner kommt an.
 
 ## Offen — das Wichtigste zuerst
 
@@ -195,3 +223,5 @@ Zum echten Testen drei Fenster: eins als Bühne, zwei als Spieler — eins davon
 | `review-einklickstart.md` | Unabhängiges Review des Ein-Klick-Starts: sieben Befunde, drei Mutationen an der Verdrahtung blieben grün |
 | `bericht-fixwelle-einklickstart.md` | Vierte Welle: B1–B7 und T1, Startentscheidungen in `startup.ts`, vierzehn Rücknahmeproben |
 | `bericht-fragen-upload.md` | Eigene Fragen hochladen: Format, verdautes KI-Beiwerk, ein Parser für beide Fassungen, 43 Rücknahmeproben |
+| `review-fragen-upload.md` | Unabhängiges Review des Fragen-Uploads: zwölf Befunde, drei Mutationen blieben grün |
+| `bericht-welle5-fragen-upload.md` | Fünfte Welle: B1–B6, B10, B12, eine korrigierte Alt-Zusage, 23 Rücknahmeproben |
