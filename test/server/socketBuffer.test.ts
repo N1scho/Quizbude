@@ -4,6 +4,8 @@ import type { AddressInfo } from 'node:net';
 import { Server } from 'socket.io';
 import { io as ioClient } from 'socket.io-client';
 import { readFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { request } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { importSpezifizierer } from '../quelltext.js';
 import { WIRE_CHANNEL } from '@quizbude/protocol';
@@ -221,6 +223,75 @@ describe('Am echten Draht gemessen', () => {
  * zwar nicht an seiner Konstanten, sondern an dem, was engine.io daraus
  * gemacht hat, plus einer echten Nachricht ueber einen echten Draht.
  */
+/**
+ * Was ein Server beim Handschlag aushandelt - gemessen, nicht abgelesen.
+ *
+ * Ein roher Upgrade-Versuch mit `node:http`: der Client bietet
+ * `permessage-deflate` an, und die Antwort sagt, ob der Server es nimmt.
+ * Mehr braucht es dafuer nicht, und vor allem keine weitere Abhaengigkeit.
+ */
+async function ausgehandelteErweiterungen(bauen: (http: HttpServer) => Server): Promise<string> {
+  const http: HttpServer = createServer();
+  const io = bauen(http);
+  await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve));
+  const port = (http.address() as AddressInfo).port;
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      const req = request({
+        host: '127.0.0.1',
+        port,
+        path: '/socket.io/?EIO=4&transport=websocket',
+        headers: {
+          Connection: 'Upgrade',
+          Upgrade: 'websocket',
+          'Sec-WebSocket-Version': '13',
+          'Sec-WebSocket-Key': randomBytes(16).toString('base64'),
+          'Sec-WebSocket-Extensions': 'permessage-deflate; client_max_window_bits',
+        },
+      });
+      req.on('upgrade', (res, socket) => {
+        socket.destroy();
+        resolve(String(res.headers['sec-websocket-extensions'] ?? ''));
+      });
+      req.on('response', (res) =>
+        reject(new Error(`kein Upgrade, Status ${res.statusCode ?? 0}`)),
+      );
+      req.on('error', reject);
+      req.end();
+    });
+  } finally {
+    io.close();
+    await new Promise<void>((resolve) => http.close(() => resolve()));
+  }
+}
+
+/**
+ * B-5: `perMessageDeflate: false` ist eine harte Betriebsvorgabe
+ * (Konzept 6.6) - eingeschaltet reserviert zlib je Verbindung
+ * sechsstellige Byte-Betraege, und der Abend rechnet mit bis zu 5000
+ * Spielern. Die Zeile trug diese Vorgabe und war von keinem Test
+ * gebunden: `false` auf `true` zu drehen liess 318/318 gruen und `tsc`
+ * schweigen.
+ *
+ * Gebunden wird sie am Handschlag des laufenden Servers, nicht an der
+ * abgelesenen Option und nicht am Quelltext.
+ */
+describe('Der Server handelt keine Kompression aus (B-5)', () => {
+  it('bietet der Client permessage-deflate an, nimmt der Abend es nicht', async () => {
+    expect(await ausgehandelteErweiterungen(createSocketServer)).toBe('');
+  }, 20_000);
+
+  it('und der Handschlag wuerde es merken - eingeschaltet steht es in der Antwort', async () => {
+    // Die Gegenprobe zur Messung selbst. Ohne sie bliebe die Zusage oben
+    // auch dann gruen, wenn der Handschlag die Erweiterung ueberhaupt nie
+    // meldete - und die Vorgabe waere wieder ungebunden.
+    const mit = await ausgehandelteErweiterungen(
+      (h) => new Server(h, { perMessageDeflate: true, cors: { origin: true } }),
+    );
+    expect(mit).toContain('permessage-deflate');
+  }, 20_000);
+});
+
 describe('Der Server, den der Abend hochfaehrt (N3)', () => {
   // Die unguenstigste erlaubte Datei, nicht die freundliche: ein
   // Steuerzeichen ist ein Byte in der Datei und sechs am Draht.
