@@ -4,12 +4,12 @@
 
 ## Wo wir stehen
 
-Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, Ein-Klick-Start gebaut, Ein-Klick-Start reviewt und die Befunde behoben, eigene Fragen hochladen gebaut, **Fragen-Upload reviewt und die Befunde behoben** (fünfte Welle, noch nicht nachreviewt).
+Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, Ein-Klick-Start gebaut, Ein-Klick-Start reviewt und die Befunde behoben, eigene Fragen hochladen gebaut, Fragen-Upload reviewt und die Befunde behoben (fünfte Welle), **fünfte Welle nachreviewt und ihre drei Befunde behoben** (sechste Welle, noch nicht nachreviewt).
 
 **Selbst nachgemessen am Ende des Tages** (nicht aus Berichten übernommen):
 
 ```
-npm test        309 Tests, 27 Dateien, grün, Exit 0
+npm test        318 Tests, 27 Dateien, grün, Exit 0
 npx tsc         Exit 0  (strict: true aus tsconfig.base.json)
 npm run build   Exit 0  (Spielergerät: kritischer Pfad 63,45 kB gzip, unverändert)
 Riegel          node tools/standalone-parser.mjs — aktuell, Exit 0
@@ -83,7 +83,7 @@ Jemand lässt sich von seiner KI Fragen schreiben, lädt die Ausgabe hoch, das Q
 
 **Nicht einhaltbare Vorgabe, ausdrücklich abgewichen:** `transport/` sollte unberührt bleiben. Ohne eine Änderung in `gateway.ts` und `validate.ts` würde die Bühne aber immer die Demorunde spielen, egal was hochgeladen wird. Geändert sind 15 bzw. 22 Zeilen; die inhaltliche Prüfung liegt weiterhin in `loadQuestion`. `runtime/` ist unberührt. Begründung und Rückbauoption in `bericht-fragen-upload.md` Abschnitt 8.
 
-**Noch zu tun:** `standalone/quizbude.html` muss als Artifact **neu veröffentlicht** werden. Die verlinkte Fassung spielt sonst weiter mit dem alten Parser und ohne Hochladen. Die Veröffentlichung gehört hinter das Nachreview der fünften Welle.
+**Noch zu tun:** `standalone/quizbude.html` muss als Artifact **neu veröffentlicht** werden. Die verlinkte Fassung spielt sonst weiter mit dem alten Parser und ohne Hochladen. Das Nachreview der fünften Welle hat die Veröffentlichung an N1 und N2 geknüpft; beide sind mit der sechsten Welle behoben.
 
 Die Proben haben drei frische Tests als wertlos entlarvt (Code-Zaun, Normalisierung, Zeilenenden) und einen echten Fehler gefunden: der Riegel verglich die Zeilenenden mit und wäre nach jedem frischen Klon auf Windows rot gewesen. Einzelheiten, 43 Rücknahmeproben mit Wortlaut, in `bericht-fragen-upload.md`.
 
@@ -95,7 +95,7 @@ Drei Mutationsproben des Reviews waren grün bei 276/276; zwei davon (B10) hat d
 
 | | Befund | Stand |
 |---|---|---|
-| B1 | `* ✅ Merkur` ging grün durch, das Häkchen blieb im Antworttext stehen und verriet die Antwort auf der Leinwand | behoben, `e72eac3` |
+| B1 | `* ✅ Merkur` ging grün durch, das Häkchen blieb im Antworttext stehen und verriet die Antwort auf der Leinwand | behoben, `e72eac3` + `223ec81` (ab der neunten Markierung war es zurück, s. N1) |
 | B2 | Nach einer Ablehnung konnte die Bühne nie wieder eröffnen — der `room:error`-Pfad war in der Praxis tot | behoben, `e2593c2` |
 | B3 | Eine erlaubte Datei riss die Verbindung ab: `maxHttpBufferSize` stand auf der Socket.IO-Vorgabe von 1e6 Bytes | behoben, `c2a5680` |
 | B4 | Ein Titel über 256 Zeichen wurde grün geprüft und am Transportrand stillschweigend verworfen | behoben, `25e4409` |
@@ -113,6 +113,25 @@ Drei Mutationsproben des Reviews waren grün bei 276/276; zwei davon (B10) hat d
 Eine Alt-Zusage ist dabei ausdrücklich korrigiert worden: „erzeugt bei jeder Wiederverbindung und jedem weiteren Klick KEINEN zweiten Raum“ war in dieser Form falsch und widersprach dem `room:error`-Pfad derselben Welle. Sie steht jetzt in sechs Teilen, jeder einzeln gebunden. Einzelheiten, 26 Mutationsproben mit Wortlaut, in `bericht-welle5-fragen-upload.md`.
 
 Nebenbei festgehalten: **Gesetz 0 hält auch für hochgeladene Inhalte.** Fragetext, Antworttext, Erklärung und Titel als Marker durch Upload → Raum → Spielergerät — keiner kommt an.
+
+## Was das Nachreview der fünften Welle ergeben hat
+
+Sieben der acht Behebungen tragen und sind mutationsgeprüft. Die Welle hatte dabei aber zwei neue Löcher gerissen, beide im Parser-Kern und damit in **beiden** Fassungen — das Nachreview hat die Veröffentlichung der Browser-Fassung genau daran abgelehnt. 26 Mutationsproben mit Wortlaut in `nachreview-welle5.md`.
+
+| | Befund | Stand |
+|---|---|---|
+| N1 | Der Deckel der Abtrag-Schleife fiel nach oben offen aus: ab der **neunten** Markierung in derselben Zeile blieb das Häkchen im sichtbaren Label stehen, bei grünem Prüfbericht — B1 war zurück | behoben, `223ec81` |
+| N2 | Der B5-Fix ließ die **erste** Frage stillschweigend verschwinden, wenn ihr nur die Markierung fehlte: neun statt zehn Fragen und „Alles in Ordnung" | behoben, `f903d7f` |
+| N3 | Die Wirkung von B2 und B3 hing an je einer Zeile Verdrahtung, und die war nur durch einen Textschnipsel gebunden — beide Proben waren grün bei 309/309 und `tsc` Exit 0 | gebunden, `ddc15b2` |
+| N4 | `docs/STAND.md` führte B1 als behoben | nachgezogen |
+
+**Die Lehre dieser Welle:** zweimal hat ein Riegel **nach oben offen** ausgefallen statt geschlossen. Der Rundendeckel sicherte die Terminierung und ließ dafür genau den Schaden durch, gegen den die Vorwelle angetreten war; der verbreiterte Vorwort-Maßstab schloss einen Fall und öffnete am selben Zug einen stilleren. Beides fiel erst auf, weil das Nachreview über die getesteten Zahlen hinaus gemessen hat — die Falsch-Grün-Probe der fünften Welle prüfte elf Mischformen, von denen keine die achte Runde erreichte.
+
+Der Rundendeckel war nebenbei auch teuer: mit ihm blieb der Rest des Markierungslaufs stehen, und die Regex am Zeilenende suchte ihn von jeder Zeichenstelle aus neu ab — 245 s am Dateideckel gegen 67 ms ohne Deckel.
+
+Für N3 reichte ein Test nicht. Die Verdrahtung der Bühne lag im `useEffect` und war ohne DOM von keinem Verhaltenstest erreichbar; sie steht jetzt als `verdrahte()` daneben. Die Maße des Sockets lagen in `main.ts`, das kein Test anfasst; sie stehen jetzt in `transport/socketio/server.ts`, das auch das Harness aller Transporttests benutzt — und in `main.ts` gibt es kein `io` mehr, auf das sich die Mutation noch stützen könnte. Einzelheiten in `bericht-welle6.md`.
+
+**Zwei Punkte gehören dem Nutzer vorgelegt** (gemessen, nicht behoben): `[x]` am Zeilenende steht sichtbar auf der Kachel und markiert dabei die *falsche* Antwort (`* Venus` / `Merkur [x]` → grün, Label „Merkur [x]"); und ein langer Markierungslauf **mitten** in einer Zeile bremst den Parser weiterhin quadratisch (9 s bei 64 000 Häkchen, am Dateideckel Minuten — im Browser des Gastgebers ein eingefrorener Tab). Beides steht in `bericht-welle6.md` Abschnitt 6.3 und 7.
 
 ## Offen — das Wichtigste zuerst
 
