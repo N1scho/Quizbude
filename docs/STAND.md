@@ -4,15 +4,15 @@
 
 ## Wo wir stehen
 
-Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, Ein-Klick-Start gebaut, Ein-Klick-Start reviewt und die Befunde behoben, eigene Fragen hochladen gebaut, Fragen-Upload reviewt und die Befunde behoben (fünfte Welle), **fünfte Welle nachreviewt und ihre drei Befunde behoben** (sechste Welle, noch nicht nachreviewt).
+Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, Ein-Klick-Start gebaut, Ein-Klick-Start reviewt und die Befunde behoben, eigene Fragen hochladen gebaut, Fragen-Upload reviewt und die Befunde behoben (fünfte Welle), fünfte Welle nachreviewt und ihre drei Befunde behoben (sechste Welle), **sechste Welle nachreviewt und ihre fünf Befunde behoben** (siebte Welle, noch nicht nachreviewt).
 
 **Selbst nachgemessen am Ende des Tages** (nicht aus Berichten übernommen):
 
 ```
-npm test        318 Tests, 27 Dateien, grün, Exit 0
+npm test        326 Tests, 28 Dateien, grün, Exit 0
 npx tsc         Exit 0  (strict: true aus tsconfig.base.json)
 npm run build   Exit 0  (Spielergerät: kritischer Pfad 63,45 kB gzip, unverändert)
-Riegel          node tools/standalone-parser.mjs — aktuell, Exit 0
+Riegel          node tools/standalone-parser.mjs — aktuell, Exit 0, ohne --schreiben
 Arbeitsbaum     sauber
 ```
 
@@ -83,7 +83,7 @@ Jemand lässt sich von seiner KI Fragen schreiben, lädt die Ausgabe hoch, das Q
 
 **Nicht einhaltbare Vorgabe, ausdrücklich abgewichen:** `transport/` sollte unberührt bleiben. Ohne eine Änderung in `gateway.ts` und `validate.ts` würde die Bühne aber immer die Demorunde spielen, egal was hochgeladen wird. Geändert sind 15 bzw. 22 Zeilen; die inhaltliche Prüfung liegt weiterhin in `loadQuestion`. `runtime/` ist unberührt. Begründung und Rückbauoption in `bericht-fragen-upload.md` Abschnitt 8.
 
-**Noch zu tun:** `standalone/quizbude.html` muss als Artifact **neu veröffentlicht** werden. Die verlinkte Fassung spielt sonst weiter mit dem alten Parser und ohne Hochladen. Das Nachreview der fünften Welle hat die Veröffentlichung an N1 und N2 geknüpft; beide sind mit der sechsten Welle behoben.
+**Noch zu tun:** `standalone/quizbude.html` muss als Artifact **neu veröffentlicht** werden. Die verlinkte Fassung spielt sonst weiter mit dem alten Parser und ohne Hochladen. Das Nachreview der fünften Welle hat die Veröffentlichung an N1 und N2 geknüpft, das Nachreview der sechsten sie dann freigegeben; die beiden Befunde, die es der Fassung mitgegeben hat (B-1, B-2), sind mit der siebten Welle behoben. Der Kern der ausgelieferten Datei ist auf dem Stand von `053b5c8`.
 
 Die Proben haben drei frische Tests als wertlos entlarvt (Code-Zaun, Normalisierung, Zeilenenden) und einen echten Fehler gefunden: der Riegel verglich die Zeilenenden mit und wäre nach jedem frischen Klon auf Windows rot gewesen. Einzelheiten, 43 Rücknahmeproben mit Wortlaut, in `bericht-fragen-upload.md`.
 
@@ -132,6 +132,28 @@ Der Rundendeckel war nebenbei auch teuer: mit ihm blieb der Rest des Markierungs
 Für N3 reichte ein Test nicht. Die Verdrahtung der Bühne lag im `useEffect` und war ohne DOM von keinem Verhaltenstest erreichbar; sie steht jetzt als `verdrahte()` daneben. Die Maße des Sockets lagen in `main.ts`, das kein Test anfasst; sie stehen jetzt in `transport/socketio/server.ts`, das auch das Harness aller Transporttests benutzt — und in `main.ts` gibt es kein `io` mehr, auf das sich die Mutation noch stützen könnte. Einzelheiten in `bericht-welle6.md`.
 
 **Zwei Punkte gehören dem Nutzer vorgelegt** (gemessen, nicht behoben): `[x]` am Zeilenende steht sichtbar auf der Kachel und markiert dabei die *falsche* Antwort (`* Venus` / `Merkur [x]` → grün, Label „Merkur [x]"); und ein langer Markierungslauf **mitten** in einer Zeile bremst den Parser weiterhin quadratisch (9 s bei 64 000 Häkchen, am Dateideckel Minuten — im Browser des Gastgebers ein eingefrorener Tab). Beides steht in `bericht-welle6.md` Abschnitt 6.3 und 7.
+
+## Was das Nachreview der sechsten Welle ergeben hat
+
+N1 und N3 sind **bewiesen behoben und mutationsgeprüft**, N2 war in seinem Kern behoben, aber nicht in seiner Klasse — und hatte in der Gegenrichtung einen neuen, lauten Ausfall erzeugt, den niemand gemessen hatte. Acht Mutationsproben mit Wortlaut in `nachreview-welle6.md`; das Nachreview hat die Veröffentlichung der Browser-Fassung **freigegeben**, mit zwei Befunden als Beipackzettel.
+
+| | Befund | Stand |
+|---|---|---|
+| B-1 | Ein Vorwort aus **drei oder mehr** Zeilen ohne Leerzeile ließ den ganzen Upload scheitern — der Nutzer las „keine Antwort markiert" über dem Wort „Klar!". Regress der sechsten Welle | behoben, `053b5c8` |
+| B-2 | Eine erste Frage mit **genau einer** Antwortzeile verschwand weiter still; der Quelltextkommentar behauptete nachweislich das Gegenteil | behoben, dieselbe Stelle, `053b5c8` |
+| B-3 | `leitung.current = gelegt;` ließ sich entfernen, während der gewachte Text stehen blieb: 318/318 grün, am Gerät eine tote Bühne | gebunden, `4fd9113` |
+| B-4 | Der Textwächter über `main.ts` war mit `import { Server as S }` zu umgehen, B3 wäre am Abend zurück | gebunden, `142a72e` |
+| B-5 | `perMessageDeflate: false` trug eine harte Betriebsvorgabe und war von keinem Test gebunden | gebunden, `da3603f` |
+
+**Die Lehre dieser Welle:** B-1 und B-2 waren **dieselbe Klausel**, die gegen sich selbst zog — jeder Maßstab, der Zeilen oder Antworten *zählt*, muss eine der beiden Richtungen falsch entscheiden, weil ein dreizeiliges Vorwort und eine erste Frage mit zwei Antworten dieselbe Form haben. Entschieden wird jetzt am Satzzeichen (`istVorwort`): ein Vorwort trägt in jeder Zeile einen Doppelpunkt oder ein Ausrufezeichen. Tragend ist dabei, dass eine **richtig geschriebene** Frage ihre Markierung trägt und damit nie Vorwort sein kann; das Satzzeichen entscheidet nur über Blöcke, bei denen der Autor sie vergessen hat — und dort im Zweifel laut.
+
+Dazu geben die **beiden Türen des Parsers** jetzt bei derselben Eingabe dieselbe Antwort. Vorher waren Zeilenformat und JSON-im-Zaun bei fünf von neun geprüften Vorwortformen verschiedener Meinung; die JSON-Tür meldet seitdem einen Fehler, wenn über dem JSON etwas steht, das kein Vorwort ist. Eine Titelzeile mit `#` bleibt dort ausdrücklich erlaubt.
+
+B-3, B-4 und B-5 waren dreimal derselbe Fehlertyp wie in der zweiten Welle: ein Wächter, der Text liest statt Wirkung. Die Bühne hängt jetzt an einem Test, der `App` wirklich ruft und ihre Effekte ausführt (eine Attrappe von `react` führt die Haken — ohne DOM geht das sonst nicht); `main.ts` an der Importkante, gelesen mit dem TypeScript-Parser statt mit einer Regex; `perMessageDeflate` am Handschlag eines laufenden Servers. Einzelheiten, sieben Mutationsproben mit Wortlaut, in `bericht-welle7.md`.
+
+**Neu vorzulegen, und es gehört dem Nutzer:** ein Vorwort, dessen Zeilen **kein** Satzzeichen tragen (`Klar` / `Hier sind deine Fragen` / `Viel Spass`), fällt jetzt laut statt still. Das ist die bewusste Anwendung des Grundsatzes „lieber laut fallen als still entfernen" auf einen Fall, in dem sich beide Ziele nicht zugleich erfüllen lassen — die Meldung ist dann aber dieselbe irreführende wie bei B-1. `bericht-welle7.md` Abschnitt 7.1.
+
+Die beiden Punkte aus der sechsten Welle bleiben unverändert offen und dem Nutzer vorgelegt: `[x]` am Zeilenende und die quadratische Bremse mitten in der Zeile.
 
 ## Offen — das Wichtigste zuerst
 
@@ -244,3 +266,7 @@ Zum echten Testen drei Fenster: eins als Bühne, zwei als Spieler — eins davon
 | `bericht-fragen-upload.md` | Eigene Fragen hochladen: Format, verdautes KI-Beiwerk, ein Parser für beide Fassungen, 43 Rücknahmeproben |
 | `review-fragen-upload.md` | Unabhängiges Review des Fragen-Uploads: zwölf Befunde, drei Mutationen blieben grün |
 | `bericht-welle5-fragen-upload.md` | Fünfte Welle: B1–B6, B10, B12, eine korrigierte Alt-Zusage, 23 Rücknahmeproben |
+| `nachreview-welle5.md` | Nachreview der fünften Welle: sieben Behebungen tragen, zwei neue Löcher im Parser-Kern |
+| `bericht-welle6.md` | Sechste Welle: N1–N3, Verdrahtung der Bühne als `verdrahte()`, Socket-Maße in `server.ts` |
+| `nachreview-welle6.md` | Nachreview der sechsten Welle: N1/N3 bewiesen, N2 halb — fünf Befunde, Veröffentlichung freigegeben |
+| `bericht-welle7.md` | Siebte Welle: B-1 bis B-5, Vorwort am Satzzeichen statt an der Zeilenzahl, drei Textwächter durch Wirkung ersetzt |
