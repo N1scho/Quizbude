@@ -1,10 +1,10 @@
 # Quizbude — Stand
 
-**Letzter Arbeitstag:** 2026-10-21 · **Branch:** `durchstich` (nicht nach `main` gemerged)
+**Letzter Arbeitstag:** 2026-10-22 · **Branch:** `durchstich` (nicht nach `main` gemerged)
 
 ## Wo wir stehen
 
-Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, Ein-Klick-Start gebaut, Ein-Klick-Start reviewt und die Befunde behoben, eigene Fragen hochladen gebaut, Fragen-Upload reviewt und die Befunde behoben (fünfte Welle), fünfte Welle nachreviewt und ihre drei Befunde behoben (sechste Welle), **sechste Welle nachreviewt und ihre fünf Befunde behoben** (siebte Welle, noch nicht nachreviewt).
+Konzeptphase abgeschlossen, Durchstich gebaut, unabhängig reviewt, Fix-Welle durchgelaufen, Nachreview erledigt, zweite Fix-Welle durchgelaufen, **zweite Welle nachreviewt**, dritte Fix-Welle durchgelaufen, Ein-Klick-Start gebaut, Ein-Klick-Start reviewt und die Befunde behoben, eigene Fragen hochladen gebaut, Fragen-Upload reviewt und die Befunde behoben (fünfte Welle), fünfte Welle nachreviewt und ihre drei Befunde behoben (sechste Welle), **sechste Welle nachreviewt und ihre fünf Befunde behoben** (siebte Welle), **siebte Welle unabhängig nachreviewt: technisches GO**, mit offener Produktentscheidung zum Vorwort ohne Satzzeichen.
 
 **Selbst nachgemessen am Ende des Tages** (nicht aus Berichten übernommen):
 
@@ -13,7 +13,7 @@ npm test        326 Tests, 28 Dateien, grün, Exit 0
 npx tsc         Exit 0  (strict: true aus tsconfig.base.json)
 npm run build   Exit 0  (Spielergerät: kritischer Pfad 63,45 kB gzip, unverändert)
 Riegel          node tools/standalone-parser.mjs — aktuell, Exit 0, ohne --schreiben
-Arbeitsbaum     sauber
+Arbeitsbaum     versionierte Dateien sauber nach Mutationsrücknahme; Discoverybericht separat
 ```
 
 ## Was das Nachreview ergeben hat
@@ -155,6 +155,14 @@ B-3, B-4 und B-5 waren dreimal derselbe Fehlertyp wie in der zweiten Welle: ein 
 
 Die beiden Punkte aus der sechsten Welle bleiben unverändert offen und dem Nutzer vorgelegt: `[x]` am Zeilenende und die quadratische Bremse mitten in der Zeile.
 
+## Was das Nachreview der siebten Welle ergeben hat
+
+**Keine neuen High-Confidence-Befunde im Diff `b4d0dbb..ef8f9d4`; technisches GO.** 326 Tests in 28 Dateien, Typprüfung, Build und Standalone-Riegel wurden unabhängig nachgemessen. Sieben eigene Mutationen wurden jeweils durch die erwarteten Assertions rot und bytegleich zurückgenommen; danach lief die vollständige Suite wieder grün. Der kritische Pfad des Spielergeräts bleibt bei 63,45 kB gzip.
+
+B-1/B-2 sind für die beauftragten Fälle bewiesen, einschließlich der gegenläufigen Rückfälle. B-3 bindet die App-/Leitungsnaht mit einer Hook-Attrappe, B-4 die Importkante per AST, B-5 die Kompressionsaushandlung am laufenden Server. B-3 und B-4 sind keine vollständigen Browser- bzw. main.ts-Laufzeitbeweise. Die zusätzlichen Messungen bestätigen die begründeten Erweiterungen für mehrere Vorwortblöcke und den JSON-Fehlerpfad.
+
+**Offen bleibt die Produktentscheidung zum Vorwort ohne Satzzeichen.** Beide Parser-Türen lehnen es aktuell ab; das Nachreview hat diese Entscheidung nicht vorweggenommen. Keine Veröffentlichung, kein Merge, kein Push. Details und Prüfgrenzen: `nachreview-welle7.md`. Der frühere Haltepunkt vom abgebrochenen Upload-Review ist überholt und wurde auf diesen Stand gebracht.
+
 ## Offen — das Wichtigste zuerst
 
 ### 1. Zwei Restrisiken aus dem Nachreview, bewusst nicht behoben
@@ -269,4 +277,5 @@ Zum echten Testen drei Fenster: eins als Bühne, zwei als Spieler — eins davon
 | `nachreview-welle5.md` | Nachreview der fünften Welle: sieben Behebungen tragen, zwei neue Löcher im Parser-Kern |
 | `bericht-welle6.md` | Sechste Welle: N1–N3, Verdrahtung der Bühne als `verdrahte()`, Socket-Maße in `server.ts` |
 | `nachreview-welle6.md` | Nachreview der sechsten Welle: N1/N3 bewiesen, N2 halb — fünf Befunde, Veröffentlichung freigegeben |
-| `bericht-welle7.md` | Siebte Welle: B-1 bis B-5, Vorwort am Satzzeichen statt an der Zeilenzahl, drei Textwächter durch Wirkung ersetzt |
+| `bericht-welle7.md` | Siebte Welle: B-1 bis B-5, Vorwort am Satzzeichen statt an der Zeilenzahl, App-Naht und Handschlag am Verhalten, Importkante per AST gebunden |
+| `nachreview-welle7.md` | Unabhängiges Nachreview: sieben rote Mutationen, alle Tore grün, technisches GO mit offener Vorwortentscheidung |

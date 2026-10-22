@@ -1,61 +1,25 @@
-# Haltepunkt — 2026-10-20, Abend
+﻿# Haltepunkt — 2026-10-22
 
-Die Sitzung wurde mitten im Review des Fragen-Uploads beendet. Dieses Dokument ist
-der Einstieg beim Wiederaufnehmen; `STAND.md` bleibt die vollstaendige Uebergabe.
+Einstieg zum Fortsetzen. Die vollständige Historie und die offenen Folgeaufgaben stehen in `STAND.md`.
 
-## Zustand, selbst nachgemessen
+## Verifizierter Stand
 
-```
-HEAD            42ade60 auf durchstich (nicht nach main gemerged)
-npm test        276 Tests, 26 Dateien, Exit 0
-npx tsc         Exit 0
-npm run build   Exit 0
-Arbeitsbaum     sauber bis auf docs/proben-abbruch/
-```
+- Branch `durchstich`, geprüfter Produktstand `ef8f9d4`; nicht nach `main` gemerged.
+- Das frische Nachreview der siebten Fix-Welle (`b4d0dbb..ef8f9d4`) ist abgeschlossen: keine neuen High-Confidence-Befunde, technisches GO. Bericht: `docs/nachreview-welle7.md`.
+- 326/326 Tests in 28 Dateien vor und nach sieben Gegenmutationen grün; alle sieben Mutationen rot und bytegleich zurückgenommen.
+- Typecheck, Build und Standalone-Riegel ohne `--schreiben`: Exit 0. Spielergerät: 63,45 kB gzip gegen Budget 65 kB.
+- Keine dauerhaften Code-/Teständerungen aus dem Review. Die parallele Datei `docs/continuation-discovery-2026-10-22.md` wurde nicht in den Review-Commit aufgenommen.
 
-## Was fertig ist
+## Nächster Schritt
 
-Durchstich mit drei Fix-Wellen und je eigenem Nachreview. Ein-Klick-Start per
-Doppelklick auf `quizbude-starten.cmd`, inklusive vierter Welle (blockierender
-IPv4-Befund behoben, Startentscheidungen in `runtime/startup.ts` gebunden).
-Fragen-Upload in beiden Fassungen mit einem Parser in `packages/core`.
+Das Upload-Review und die anschließenden Nachreviews sind erledigt; das alte abgebrochene Review nicht erneut starten. Vor jeder neuen Umsetzung den aktuellen Git-Status lesen und den eng begrenzten Auftrag festlegen.
 
-## Der naechste Schritt, genau hier weitermachen
+Offene Produktentscheidung: Soll ein Vorwort ohne `:`/`!` weiterhin laut abgelehnt werden, oder soll die Erkennung/Fehlermeldung in einem eigenen Paket erweitert werden? Beide Parser-Türen lehnen es aktuell ab. Diese Entscheidung wurde nicht vorweggenommen.
 
-**Das Review des Fragen-Uploads (Diff `c344c06..42ade60`) ist unvollstaendig
-abgebrochen.** Es gibt keinen Bericht; `docs/review-fragen-upload.md` fehlt.
-Neu beauftragen, frischer Agent, rein lesend.
+Unverändert offen und außerhalb dieser Welle: `[x]` am Zeilenende, quadratische Bremse innerhalb einer Zeile, weitere im Stand dokumentierte Altlasten. Die zweite Featurewelle (SQLite, Reconnect, Auswertungsseite, QR-Code) wurde nicht begonnen.
 
-**Der Pruefer sass zuletzt an der wichtigsten Stelle.** Seine beiden unfertigen
-Proben liegen in `docs/proben-abbruch/` (als `.txt` geparkt, damit sie nicht als
-Tests laufen — zum Wiederbeleben nach `test/` zurueckkopieren und auf `.test.ts`
-enden lassen):
+## Veröffentlichung und Gerätetest
 
-- `probe-transportrand.ts.txt` — die heisse Spur: ein `host:create` mit einem
-  Titel ueber 256 Zeichen scheint **weder** `room:created` **noch** `room:error`
-  zu erzeugen. Ein stiller Abwurf am Transportrand waere ein Befund. Das ist der
-  erste Pruefpunkt beim Neustart.
-- `probe-parser-ki-ausgaben.ts.txt` — Parser gegen echte KI-Ausgabe (Vorwort,
-  Code-Zaun, Nummerierung, `A)`, Fett im Fragetext, Haekchen).
+Es wurde nichts veröffentlicht, gemerged oder gepusht. Der tatsächliche externe Artifact-Stand wurde in diesem Review nicht geprüft; vor einer Veröffentlichung den Zielstand gesondert feststellen.
 
-Die uebrigen Schwerpunkte des abgebrochenen Auftrags: Autorisierung am
-Transportrand (darf ein Spielergeraet der Buehne ein Quiz unterschieben?),
-Escaping in beiden Fassungen, der Riegel gegen Auseinanderlaufen
-(`tools/standalone-parser.mjs`), Zeilennummern in Fehlermeldungen nach entferntem
-Vorwort, und ob die Oberflaechen gebunden sind oder nur die reinen Funktionen.
-
-## Danach
-
-`standalone/quizbude.html` ist geaendert und committet, aber **noch nicht neu
-veroeffentlicht**. Unter dem Link
-https://claude.ai/artifact/GSSnCM9puxxFsuSJPasZ8j laeuft weiterhin die alte,
-funktionierende Fassung ohne Upload. Neu veroeffentlichen erst nach dem Review.
-
-Danach die zweite Welle: SQLite, Reconnect mit Sitzungstoken, Auswertungsseite,
-QR-Code.
-
-## Was keine Maschine beantwortet
-
-Gespielt hat es niemand. Offen bleiben der Doppelklick aus dem Explorer, der
-Firewall-Dialog, ein echtes Gasthandy im WLAN und die Frage, ob sich zehn
-Sekunden Lesezeit auf der Leinwand richtig anfuehlen.
+Weiterhin nur am Gerät prüfbar: Doppelklick aus dem Explorer, Firewall-Dialog, Gastgerät im WLAN, Browserdarstellung/Dateiablage sowie Timing und Lesefenster auf der Leinwand. Die Hook-Attrappe im Test ist kein Browser-E2E-Test.
